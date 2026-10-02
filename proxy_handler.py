@@ -23,6 +23,35 @@ import json
 import base64
 from urllib.parse import urlparse, parse_qs, unquote
 
+# ============================================================
+# 日志脱敏：拦截 stdout/stderr，自动遮蔽邮箱、域名、IP、密码
+# ============================================================
+class _SanitizeFilter:
+    IP_RE    = re.compile(r'\b\d{1,3}(?:\.\d{1,3}){3}\b')
+    MAIL_RE  = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
+    DOM_RE   = re.compile(r'(?:[A-Za-z0-9-]+\.)*16315\.com(?::\d+)?')
+    KV_RE    = re.compile(r'(password|passwd|uuid|token|secret|auth|email|account)=[^&\s,]+', re.I)
+    JSON_RE  = re.compile(r'"(password|email|account|uuid|token|altcha)"\s*:\s*"[^"]*"', re.I)
+
+    def __init__(self, stream):
+        self.stream = stream
+    def write(self, msg):
+        msg = self.IP_RE.sub('***.***.***.***', msg)
+        msg = self.MAIL_RE.sub('***@***.***', msg)
+        msg = self.DOM_RE.sub('***.***', msg)
+        msg = self.KV_RE.sub(lambda m: m.group(1) + '=***', msg)
+        msg = self.JSON_RE.sub(lambda m: '"%s":"***"' % m.group(1), msg)
+        self.stream.write(msg)
+    def flush(self):
+        self.stream.flush()
+
+sys.stdout = _SanitizeFilter(sys.stdout)
+sys.stderr = _SanitizeFilter(sys.stderr)
+
+# ============================================================
+# 以下是你原来的代码，完全不动
+# ============================================================
+
 LISTEN_HOST = "127.0.0.1"
 LISTEN_PORT = 8080
 
