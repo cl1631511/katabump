@@ -40,24 +40,38 @@ jobs:
         PROXY_URL: ${{ secrets.PROXY_URL }}
         PROXY_CHAIN_URL: ${{ secrets.PROXY_CHAIN_URL }}
       run: |
+        # ===== 遮蔽所有敏感值 =====
+        echo "::add-mask::$PROXY_URL"
+        echo "::add-mask::$PROXY_CHAIN_URL"
+
         if [ -z "$PROXY_URL" ]; then
           echo "PROXY_URL not set, skipping sing-box setup."
           exit 0
         fi
+
         SINGBOX_VER="1.13.16"
         echo "Downloading sing-box v${SINGBOX_VER}..."
         wget -q "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VER}/sing-box-${SINGBOX_VER}-linux-amd64.tar.gz"
         tar -xzf "sing-box-${SINGBOX_VER}-linux-amd64.tar.gz"
         mv "sing-box-${SINGBOX_VER}-linux-amd64/sing-box" ./sing-box
         chmod +x ./sing-box
+
         echo "Generating sing-box config from PROXY_URL..."
+        # proxy_handler.py 内部若 print 敏感内容，后续 sed 会兜底过滤
         python proxy_handler.py
+
         echo "Starting sing-box..."
         nohup ./sing-box run -c config.json > singbox.log 2>&1 &
         # 二跳/单节点无需等 urltest；给 inbound 起来即可
         sleep 3
-        echo "--- singbox.log ---"
-        cat singbox.log || true
+
+        # ===== 遮蔽：IP / 密码 / UUID / token 全部替换 =====
+        echo "--- singbox.log (sanitized, tail) ---"
+        sed -E \
+          -e 's/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/***.***.***.***/g' \
+          -e 's/(password|passwd|uuid|token|secret|auth|user(info)?)=[^ ,&"]+/\1=***/gi' \
+          singbox.log | tail -20 || true
+
         echo "--- health check ---"
         if ! pgrep -f "./sing-box" > /dev/null; then
           echo "❌ sing-box process not running"
@@ -65,18 +79,25 @@ jobs:
         fi
         echo "✅ sing-box process alive"
         (command -v ss >/dev/null && ss -tlnp 2>/dev/null | grep 8080) || echo "(ss unavailable)"
+
         echo "--- proxy connectivity test ---"
         # icanhazip：api.ip.sb / gstatic 在部分出口会被 RST，不等于隧道没通。
-        if curl -sS -m 20 -x http://127.0.0.1:8080 https://ipv4.icanhazip.com; then
-          echo ""
-          echo "  <- proxy OK"
-          grep -iE "urltest|selected|node-|ERROR" singbox.log | tail -8 || true
+        # 只取 HTTP 状态码，不打印出口 IP。
+        HTTP_CODE=$(curl -sS -m 20 -x http://127.0.0.1:8080 -o /dev/null -w "%{http_code}" https://ipv4.icanhazip.com || echo "000")
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "  <- proxy OK (http $HTTP_CODE)"
+          grep -iE "urltest|selected|node-|ERROR" singbox.log | tail -8 \
+            | sed -E -e 's/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/***.***.***.***/g' \
+                     -e 's/(password|passwd|uuid|token|secret|auth|user(info)?)=[^ ,&"]+/\1=***/gi' || true
         else
           echo ""
-          echo "❌ proxy connect FAILED — dialer/chain unreachable from this runner"
+          echo "❌ proxy connect FAILED (http $HTTP_CODE) — dialer/chain unreachable from this runner"
           echo "   The sing-box process is alive but PROXY_URL (and PROXY_CHAIN_URL if set) did not egress."
-          echo "--- singbox.log after fail ---"
-          cat singbox.log || true
+          echo "--- singbox.log after fail (sanitized) ---"
+          sed -E \
+            -e 's/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/***.***.***.***/g' \
+            -e 's/(password|passwd|uuid|token|secret|auth|user(info)?)=[^ ,&"]+/\1=***/gi' \
+            singbox.log | tail -30 || true
           exit 1
         fi
 
@@ -89,7 +110,22 @@ jobs:
         IS_PROXY: "true"
         TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
         TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-      run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python3 app.py
+      run: |
+        # ===== 遮蔽 secrets =====
+        echo "::add-mask::$USERS_JSON"
+        echo "::add-mask::$PROXY_URL"
+        echo "::add-mask::$PROXY_CHAIN_URL"
+        echo "::add-mask::$TG_BOT_TOKEN"
+        echo "::add-mask::$TG_CHAT_ID"
+
+        # ===== 过滤 app.py 输出里的 IP / 账号 / 密码 =====
+        # app.py 内部的 print 无法直接改，这里用管道 + sed 兜底
+        xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+          python3 app.py 2>&1 | sed -E \
+            -e 's/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/***.***.***.***/g' \
+            -e 's/(password|passwd|uuid|token|secret|auth|user(info)?|email|account)=[^ ,&":]+/\1=***/gi' \
+            -e 's#"email"\s*:\s*"[^"]*"#"email":"***"#g' \
+            -e 's#"password"\s*:\s*"[^"]*"#"password":"***"#g'
 
     # [根因] 把本次 run 更新后的 renew_state.json 存回（run_id 唯一键，供下次 restore）。
     # always(): 即使续期失败也留续状态，避免重跑挖掉已续记记录。
@@ -100,6 +136,7 @@ jobs:
         path: renew_state.json
         key: renew-state-${{ github.run_id }}
 
+    # ===== 只上传截图，不再上传 singbox.log / config.json =====
     - name: Upload Screenshots
       if: always()
       uses: actions/upload-artifact@v6
@@ -108,6 +145,4 @@ jobs:
         path: |
           *.png
           screenshots/
-          singbox.log
-          config.json
         if-no-files-found: ignore
