@@ -10,6 +10,33 @@ import re
 import base64
 from seleniumbase import SB
 
+# ============================================================
+# 日志脱敏：拦截 stdout/stderr，自动遮蔽邮箱、域名、IP、密码
+# ============================================================
+import sys as _sys
+
+class _SanitizeFilter:
+    IP_RE    = re.compile(r'\b\d{1,3}(?:\.\d{1,3}){3}\b')
+    MAIL_RE  = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
+    DOM_RE   = re.compile(r'(?:[A-Za-z0-9-]+\.)*16315\.com(?::\d+)?')
+    KV_RE    = re.compile(r'(password|passwd|uuid|token|secret|auth|email|account)=[^&\s,]+', re.I)
+    JSON_RE  = re.compile(r'"(password|email|account|uuid|token|altcha)"\s*:\s*"[^"]*"', re.I)
+
+    def __init__(self, stream):
+        self.stream = stream
+    def write(self, msg):
+        msg = self.IP_RE.sub('***.***.***.***', msg)
+        msg = self.MAIL_RE.sub('***@***.***', msg)
+        msg = self.DOM_RE.sub('***.***', msg)
+        msg = self.KV_RE.sub(lambda m: m.group(1) + '=***', msg)
+        msg = self.JSON_RE.sub(lambda m: '"%s":"***"' % m.group(1), msg)
+        self.stream.write(msg)
+    def flush(self):
+        self.stream.flush()
+
+_sys.stdout = _SanitizeFilter(_sys.stdout)
+_sys.stderr = _SanitizeFilter(_sys.stderr)
+
 # 从环境变量获取账号密码和 TG 配置
 TG_CHAT_ID   = os.environ.get("TG_CHAT_ID") or ""        # tg通知 chat id(可选)
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN") or ""      # tg通知bot token(可选)
