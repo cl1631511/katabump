@@ -37,6 +37,10 @@ class _SanitizeFilter:
 _sys.stdout = _SanitizeFilter(_sys.stdout)
 _sys.stderr = _SanitizeFilter(_sys.stderr)
 
+# ============================================================
+# 以下是你原来的代码，完全不动
+# ============================================================
+
 # 从环境变量获取账号密码和 TG 配置
 TG_CHAT_ID   = os.environ.get("TG_CHAT_ID") or ""        # tg通知 chat id(可选)
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN") or ""      # tg通知bot token(可选)
