@@ -19,6 +19,7 @@ Output: config.json with HTTP inbound on 127.0.0.1:8080
 
 import os
 import sys
+import re
 import json
 import base64
 from urllib.parse import urlparse, parse_qs, unquote
