@@ -127,7 +127,8 @@ def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
 
     aud.SB = fake_sb
     if pairs is None:
-        pairs = [("uid", "12345"), ("passkey", "abc")]
+        # 默认用 NexusPHP 安全模式的真实字段名（他浏览器里看到的就是这一组）
+        pairs = [("c_secure_uid", "ZmFrZVVpZA"), ("c_secure_pass", "fakeSessionToken"), ("cf_clearance", "fakeClearance")]
     st, detail = aud.checkin({"uc": True}, site, pairs)
     return st, detail, captured["sb"]
 
@@ -141,7 +142,8 @@ def ok(cond, label):
 # ===== audiences（无按钮，widget 回调自动提交）=====
 st, detail, sb = run_case(SITE_A, A_PRE, after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
 ok(st == aud.CHK_PASS, f"A1 正常链路 -> PASS（{detail}）")
-ok(sb.cookies == [("uid", ".audiences.me"), ("passkey", ".audiences.me")], "A1b cookie 注入到 .audiences.me")
+ok(sb.cookies == [("c_secure_uid", ".audiences.me"), ("c_secure_pass", ".audiences.me"),
+                  ("cf_clearance", ".audiences.me")], "A1b 安全模式 cookie 注入到 .audiences.me")
 ok("attendance_audiences_result.png" in sb.shots, "A1c 成功也留截图，文件名带站点")
 
 st, detail, sb = run_case(SITE_A, A_PRE, after_body=A_PRE, after_card=True)
@@ -167,10 +169,12 @@ ok(st == aud.CHK_VERIFY_FAIL, f"A8 Turnstile 失败 -> VERIFY_FAIL（{detail}）
 ok("attendance_audiences_turnstile_fail.png" in sb.shots, "A8b 失败留截图")
 
 # ===== mua（有「立即签到」按钮）=====
+# 这里显式用普通模式 uid+passkey，证明两种登录 cookie 形态都能走完整条链路
 st, detail, sb = run_case(SITE_M, M_PRE, after_body="签到成功，获得魔力值 100" + FILL,
-                          submit_ret="clicked")
+                          submit_ret="clicked",
+                          pairs=[("uid", "1"), ("passkey", "abc")])
 ok(st == aud.CHK_PASS, f"M1 正常链路 -> PASS（{detail}）")
-ok(sb.cookies == [("uid", ".mua.xloli.cc"), ("passkey", ".mua.xloli.cc")], "M1b cookie 注入到 .mua.xloli.cc")
+ok(sb.cookies == [("uid", ".mua.xloli.cc"), ("passkey", ".mua.xloli.cc")], "M1b 普通模式 cookie 注入到 .mua.xloli.cc")
 
 st, detail, sb = run_case(SITE_M, M_PRE, after_body=M_PRE, after_card=True)
 ok(st == aud.CHK_UNKNOWN, f"M2 提交后仍是未签到快照 -> UNKNOWN，非 PASS（{st}）")
@@ -194,12 +198,21 @@ os.environ["MUA_COOKIE"] = "cf_clearance=abc; lang=cn"
 st, detail = aud.run_site({"uc": True}, SITE_M)
 ok(st == aud.CHK_NO_SESSION and "缺少登录 cookie" in detail, f"S2 cookie 无会话字段 -> 不启动浏览器（{detail}）")
 
-os.environ["MUA_COOKIE"] = "uuid=00000000-0000-4000-8000-000000000000; passkey=abc"
+os.environ["MUA_COOKIE"] = "c_secure_pass=fakeSessionToken"
 mua_pairs = aud.parse_cookie_header(os.environ["MUA_COOKIE"])
-ok(aud.session_ok(mua_pairs, SITE_M), "S3 mua 的 uuid+passkey 组合被认作有效会话")
+ok(aud.session_ok(mua_pairs, SITE_M), "S3 mua 只有 c_secure_pass 一项也算有效会话（他实际粘的就是这样）")
+
+os.environ["MUA_COOKIE"] = "uuid=00000000-0000-4000-8000-000000000000; passkey=abc"
+ok(aud.session_ok(aud.parse_cookie_header(os.environ["MUA_COOKIE"]), SITE_M),
+   "S3b 普通模式 passkey 同样有效")
 
 os.environ["AUDIENCES_COOKIE"] = "uid=12345"
 st, detail = aud.run_site({"uc": True}, SITE_A)
-ok(st == aud.CHK_NO_SESSION and "passkey" in detail, f"S4 audiences 缺 passkey -> 提示（{detail}）")
+ok(st == aud.CHK_NO_SESSION and "c_secure_pass" in detail,
+   f"S4 audiences 只有 uid -> 提示需要哪些字段（{detail}）")
+
+os.environ["AUDIENCES_COOKIE"] = "c_secure_uid=ZmFrZVVpZA; c_secure_ssl=fakeSslFlag"
+st, detail = aud.run_site({"uc": True}, SITE_A)
+ok(st == aud.CHK_NO_SESSION, f"S5 安全模式里非 pass 的字段不启动浏览器（{detail}）")
 
 print("\nALL OK")

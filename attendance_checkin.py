@@ -51,9 +51,14 @@ class Site:
     attend: str
     domain: str
     cookie_env: str
-    require_all: tuple = ()          # 必须同时具备的 cookie（已确认的登录态字段）
-    require_any: tuple = ()          # 至少具备其一即可（字段名不确定的站点）
+    require_any: tuple = ()          # 至少要具备其一才算有登录态
 
+
+# NexusPHP 的登录 cookie 有两种形态，取决于站点是否开了「安全 cookie」模式：
+#   普通模式  uid + passkey
+#   安全模式  c_secure_uid + c_secure_pass（现在建站默认都开这个）
+# 真正起认证作用的只有 pass 那一个（c_secure_uid 只是 base64 的用户 id），所以只卡 pass。
+_SESSION_KEYS = ("passkey", "c_secure_pass")
 
 SITES = (
     Site(
@@ -63,7 +68,7 @@ SITES = (
         attend="https://audiences.me/attendance.php",
         domain=".audiences.me",
         cookie_env="AUDIENCES_COOKIE",
-        require_all=("uid", "passkey"),
+        require_any=_SESSION_KEYS,
     ),
     Site(
         key="mua",
@@ -72,8 +77,7 @@ SITES = (
         attend="https://mua.xloli.cc/attendance.php",
         domain=".mua.xloli.cc",
         cookie_env="MUA_COOKIE",
-        # 该站 userdetails 链接用 uuid，登录 cookie 字段名未确认，故只要求像有个会话
-        require_any=("passkey", "uid", "uuid", "sid", "phpsessid"),
+        require_any=_SESSION_KEYS,
     ),
 )
 
@@ -154,11 +158,13 @@ def parse_cookie_header(raw):
     return pairs
 
 
+def session_hint(site):
+    return "、".join(site.require_any) + "（至少有一个）"
+
+
 def session_ok(pairs, site):
     """cookie 里有没有可用登录态。cf_clearance/PHPSESSID 之类单独存在不算。"""
     names = {n.lower() for n, _ in pairs}
-    if site.require_all and not all(k in names for k in site.require_all):
-        return False
     if site.require_any and not any(k in names for k in site.require_any):
         return False
     return bool(names)
@@ -442,9 +448,9 @@ def run_site(sb_kwargs, site):
                 f"{site.cookie_env} 长度 {len(raw)}，{hint}；"
                 "要的是 DevTools Network 里请求头 Cookie: 后面那一整行（a=1; b=2）")
     if not session_ok(pairs, site):
-        need = "+".join(site.require_all) or "任一: " + "/".join(site.require_any)
         return (CHK_NO_SESSION,
-                f"{site.cookie_env} 缺少登录 cookie，需要 {need}；现有: {', '.join(n for n, _ in pairs)}")
+                f"{site.cookie_env} 缺少登录 cookie，需要 {session_hint(site)}；"
+                f"现有: {', '.join(n for n, _ in pairs)}")
 
     if core is None:
         return (CHK_UNKNOWN, f"浏览器依赖缺失，无法签到: {_DEPS_ERROR}（本地只想验 cookie 请用 --cookie-check）")
@@ -502,8 +508,8 @@ def main():
             raw = os.environ.get(site.cookie_env, "")
             pairs = parse_cookie_header(raw)
             verdict = "✅ 可用于签到" if session_ok(pairs, site) else "❌ 判为无登录态"
-            need = "+".join(site.require_all) or "任一: " + "/".join(site.require_any)
-            print(f"{site.key}: {verdict}（需要 {need}；解析出 {len(pairs)} 项：{', '.join(n for n, _ in pairs) or '无'}）")
+            print(f"{site.key}: {verdict}（需要 {session_hint(site)}；"
+                  f"解析出 {len(pairs)} 项：{', '.join(n for n, _ in pairs) or '无'}）")
         raise SystemExit(0)
 
     IS_PROXY = os.environ.get("IS_PROXY", "false").lower() == "true"

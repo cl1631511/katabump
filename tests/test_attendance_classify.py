@@ -99,8 +99,8 @@ ok('action="attendance.php"' in M_HTML and 'type="submit"' in M_HTML, "mua 是�
 ok("userdetails.php" in A_HTML and "userdetails.php" in M_HTML, "两站都有 userdetails 链接（_LOGGED_IN_JS 依据）")
 
 # ── 7. Cookie 解析与站点登录态要求 ──────────────────────────────────────────
-pairs = aud.parse_cookie_header("uid=12345; passkey=abc123; cf_clearance=hVq8; PHPSESSID=x")
-ok(pairs == [("uid", "12345"), ("passkey", "abc123"), ("cf_clearance", "hVq8"), ("PHPSESSID", "x")],
+pairs = aud.parse_cookie_header("uid=12345; passkey=abc123; cf_clearance=fakeClearance; PHPSESSID=x")
+ok(pairs == [("uid", "12345"), ("passkey", "abc123"), ("cf_clearance", "fakeClearance"), ("PHPSESSID", "x")],
    "Cookie 头解析")
 ok(aud.parse_cookie_header('[{"name":"uid","value":"12345","domain":".audiences.me"}]')
    == [("uid", "12345")], "Playwright cookies JSON 解析")
@@ -120,11 +120,25 @@ ok(aud.parse_cookie_header("uid=1;  ; passkey=a") == [("uid", "1"), ("passkey", 
 ok(aud.parse_cookie_header("auth_token=abc=def") == [("auth_token", "abc=def")],
    "值里含 = 只按第一个 = 切")
 ok(aud.session_ok(aud.parse_cookie_header("Cookie: uid=1; passkey=a"), SITE_A),
-   "带前缀的整行粘贴同样能通过 audiences 的 uid+passkey 检查")
-ok(aud.session_ok([("uid", "1"), ("passkey", "a")], SITE_A), "audiences: uid+passkey 可用")
-ok(not aud.session_ok([("uid", "1")], SITE_A), "audiences: 缺 passkey -> 不可用")
+   "带前缀的整行粘贴同样能通过 audiences 的登录态检查")
+ok(aud.session_ok([("uid", "1"), ("passkey", "a")], SITE_A), "普通模式 uid+passkey 可用")
+ok(not aud.session_ok([("uid", "1")], SITE_A), "audiences: 只有 uid -> 不可用")
 ok(not aud.session_ok([("cf_clearance", "a")], SITE_A), "audiences: 只有 cf_clearance -> 不可用")
-ok(aud.session_ok([("uuid", "abc"), ("passkey", "a")], SITE_M), "mua: passkey 即算有会话")
+ok(not aud.session_ok([("uuid", "abc")], SITE_M), "mua: 只有 uuid（那是用户 id，不是会话）-> 不可用")
 ok(not aud.session_ok([("cf_clearance", "a"), ("lang", "cn")], SITE_M), "mua: 无会话字段 -> 不可用")
+
+# ── 8. NexusPHP「安全 cookie」模式：真实站点用的就是这一组名字 ───────────────
+# 上一版只认 uid/passkey，CI 上两站全被判成 NO_SESSION。名字取自公开日志，值一律不落测试。
+SECURE_A = "c_secure_uid=ZmFrZVVpZA; c_secure_pass=fakeSessionToken; c_secure_login=fakeLoginFlag; c_secure_ssl=fakeSslFlag; cf_clearance=fakeClearance"
+pairs_sec = aud.parse_cookie_header(SECURE_A)
+ok(len(pairs_sec) == 5, "安全模式整行能解析出 5 项（全是假值，只测名字）")
+ok(aud.session_ok(pairs_sec, SITE_A), "audiences: c_secure_pass -> 可用（他实际贴进去的就是这组字段名）")
+ok(not aud.session_ok([("c_secure_uid", "ZmFrZVVpZA=")], SITE_A),
+   "audiences: 只有 c_secure_uid -> 不可用（uid 不认证）")
+ok(not aud.session_ok([("c_secure_ssl", "fakeSslFlag"), ("c_secure_login", "fakeLoginShort")], SITE_A),
+   "audiences: c_secure_* 里非 pass 的字段不算登录态")
+ok(aud.session_ok([("c_secure_pass", "x")], SITE_M), "mua: c_secure_pass 即算有会话")
+ok(aud.parse_cookie_header("c_secure_uid=ZmFrZVVpZA%3D%3D") == [("c_secure_uid", "ZmFrZVVpZA%3D%3D")],
+   "URL 编码值原样保留（不能把 %3D 当分隔符）")
 
 print("\nALL OK")

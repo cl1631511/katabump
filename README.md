@@ -56,10 +56,11 @@
 1. **取 Cookie**（一次即可，失效再换）：浏览器登录该站 → F12 → **Network** → 刷新
    `attendance.php` → 点该请求 → **Request Headers** 里的整条 `Cookie` 值复制出来。
 2. **加 Secret**：Settings → Secrets and variables → Actions，一站一个：
-   - `AUDIENCES_COOKIE`（必须同时含 `uid=` 和 `passkey=`）
-   - `MUA_COOKIE`（含 `passkey=`/`uid=`/`uuid=` 任一即可）
+   - `AUDIENCES_COOKIE`、`MUA_COOKIE` —— 整条 `Cookie` 头原样贴进去即可，脚本只检查
+     里面有没有登录字段：NexusPHP 的「安全 cookie」模式是 `c_secure_pass`（配合 `c_secure_uid`），
+     老模式是 `passkey`（配合 `uid`）；有 pass 那一个就算有登录态。
    ```
-   uid=12345; passkey=abcdef...; cf_clearance=...; PHPSESSID=...
+   c_secure_uid=ZmFrZVVpZA...; c_secure_pass=...; c_secure_login=...; cf_clearance=...
    ```
    `cf_clearance` 可不带 —— 它是 IP/UA 绑定的，CI 出口和浏览器不一样，过期了浏览器会自己重新过 CF。
    缺哪个站 secret 就只有那个站报红，另一站照签。
@@ -73,10 +74,11 @@
 5. **加新站点**：在 `attendance_checkin.py` 的 `SITES` 表里加一条（key/域名/cookie 环境变量名/
    必需的登录 cookie 字段），再配同名 secret。表单结构两种都认：有提交按钮就点按钮
    （mua），没按钮靠 widget 回调自动提交（audiences）。
-6. **本地调试**（PowerShell）：
+6. **本地调试**（PowerShell）：先只验 cookie 粘得对不对（不开浏览器、不打印码值），再真跑
    ```powershell
-   $env:AUDIENCES_COOKIE="uid=...; passkey=..."
-   $env:MUA_COOKIE="passkey=...; uid=..."
+   $env:AUDIENCES_COOKIE="c_secure_uid=...; c_secure_pass=..."
+   $env:MUA_COOKIE="c_secure_pass=..."
+   python attendance_checkin.py --cookie-check
    python attendance_checkin.py
    ```
 7. **回归测试**（不需要浏览器/网络）：
