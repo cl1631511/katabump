@@ -79,6 +79,11 @@ ok(classify(M_TEXT + " 恭喜，签到成功", SITE_M.attend) == PASS, "mua 正�
 
 # ── 3. 明确的已签到/失败措辞 ────────────────────────────────────────────────
 ok(classify("您今日已经签到，请勿重复打卡", SITE_A.attend) == ALREADY, "已签到措辞 -> ALREADY")
+# 统计行里的「已签到 N 天」不是今日已签：光秃秃的「已签到」曾把未签到页判成静默绿
+ok(classify("您已连续签到 3 天，本月已签到 12 天", SITE_A.attend) not in (ALREADY, PASS),
+   "统计行「已签到 12 天」不算今日已签")
+ok(classify("签到成功，您已连续签到 4 天", SITE_A.attend) == PASS,
+   "成功词优先于统计里的已签到 -> PASS（不是静默 ALREADY）")
 ok(classify("今日已签到", SITE_M.attend, True) == ALREADY, "今日已签到 -> ALREADY")
 ok(classify("签到失败，请重新验证", SITE_A.attend) == VERIFY_FAIL, "验证失败优先于成功词 -> VERIFY_FAIL")
 

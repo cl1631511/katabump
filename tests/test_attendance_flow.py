@@ -191,8 +191,11 @@ class FakeSB:
         if "/*diag*/" in js:                              # _TS_DIAG_JS
             card = self._cur()[2]
             return {"ifr": 2 if card else 0, "cfifr": 1 if card else 0,
-                    "shroot": 3, "shifr": 0, "cfres": 4, "api": 1,
-                    "wid": "760,230 300x65" if card else "no", "tok": 0}
+                    "shroot": 0, "shifr": 0, "cfres": 2, "api": 1,
+                    "wid": "760,230 300x65" if card else "no", "tok": 0,
+                    "vp": "1920x1080", "scroll": 0,
+                    "srcs": "[challenges.cloudflare.com cf-chl 300x65@1033]",
+                    "kids": "IFRAME" if card else "empty"}
         if "/*container*/" in js:                         # _TS_CONTAINER_JS
             # outer 抓不到 iframe 时靠容器矩形落点，所以两者要能各自独立失败
             if not self._cur()[2] or not self.state.get("container_ok", True):
@@ -440,6 +443,13 @@ ok(st == aud.CHK_PASS and len(rel) == 1 and (rel[0][2], rel[0][3]) == (734, 332)
    f"A14g widget 在 shadow root 里：量得到矩形就按它点，不去切 frame（{rel and rel[0][2:]}）")
 ok(not [t for t in sb.timeline if t[0] == "frame_in"],
    "A14g2 影子里的 iframe 切不进去，代码不能去切")
+
+
+# 折叠线外的复选框点不到：定位脚本必须先 scrollIntoView 再量矩形（CI 里容器 y=1033 而屏幕 1080）
+ok("scrollIntoView" in aud._TS_OUTER_JS and "scrollIntoView" in aud._TS_CONTAINER_JS,
+   "A15 两个定位脚本都会先把容器滚进视口")
+ok("closest" in aud._TS_OUTER_JS, "A15b 认 iframe 靠「在 [data-sitekey] 容器里」，不只看 src")
+ok("视口" in aud._fmt_diag({"vp": "1920x1080"}), "A15c 结构行会报视口尺寸")
 
 
 # ===== mua（有「立即签到」按钮）=====

@@ -101,7 +101,8 @@ CHK_UNKNOWN = "unknown"          # 流程未跑通/读不到结果 → 宁红不
 # 关键词严格对照 tests/fixtures/{audiences,mua}_attendance_pre_submit.html（未签到态快照）挑选：
 # 「获得」「连续签到」「(粒)爆米花」「人机验证」「今日签到」在未签到页面上本来就出现，
 # 用它们判成功必然假绿。成功措辞仍缺真实样本，故另有一条与措辞无关的信号：verify_pending。
-_ALREADY_KW = ("已经签到", "已签到", "已經簽到", "今日已签到", "重复签到", "请勿重复打卡")
+# 去掉光秃秃的「已签到」：统计行「您已签到 12 天」也含它，未签到当天照样命中 -> 静默假绿。
+_ALREADY_KW = ("已经签到", "已經簽到", "今日已签到", "重复签到", "请勿重复打卡")
 _SUCCESS_KW = ("签到成功", "簽到成功", "恭喜")
 _FAIL_KW = ("验证失败", "驗證失敗", "请重新验证", "验证码错误", "请先完成验证", "签到失败")
 _LOGIN_MARK = ("login.php", "signin.php")
@@ -196,10 +197,12 @@ def classify_attendance(page_text, url="", verify_pending=None):
         return CHK_UNKNOWN
     if any(k in text for k in _FAIL_KW):
         return CHK_VERIFY_FAIL
+    if any(k in text for k in _SUCCESS_KW):
+        # 成功词排在「已签到」前面：刚点完按钮的那一页往往两句都印着（「签到成功」+ 统计里的
+        # 「已签到 12 天」），这时候该报 PASS 而不是静默的 ALREADY。
+        return CHK_PASS
     if any(k in text for k in _ALREADY_KW):
         return CHK_ALREADY
-    if any(k in text for k in _SUCCESS_KW):
-        return CHK_PASS
     if verify_pending is False:
         return CHK_PASS
     return CHK_UNKNOWN
@@ -287,22 +290,31 @@ _TS_OUTER_JS = """
 return /*outer*/ (function(){
     function box(el){ var r = el.getBoundingClientRect();
         return {x: r.left, y: r.top, w: r.width, h: r.height}; }
-    function iscf(el){
-        var s = el.getAttribute ? (el.getAttribute('src') || '') : '';
-        var c = el.className || '', id = el.id || '';
-        return s.indexOf('challenges.cloudflare.com') > -1 || s.indexOf('/turnstile/') > -1 ||
-               c.indexOf('turnstile') > -1 || id.indexOf('turnstile') > -1;
+    function host(el){
+        var s = el.src || el.getAttribute('src') || '';
+        var m = /^https?:\\/\\/([^\\/]+)/.exec(s);
+        return m ? m[1] : (s ? 'other' : 'blank');
     }
+    function iscf(el){
+        var s = (el.src || '') + ' ' + (el.getAttribute('src') || '') + ' ' +
+                (el.getAttribute('name') || '') + ' ' + (el.className || '') + ' ' + (el.id || '');
+        if (s.indexOf('challenges.cloudflare.com') > -1 || s.indexOf('/turnstile/') > -1 ||
+            s.indexOf('turnstile') > -1 || s.indexOf('cf-chl') > -1) return true;
+        // CF 的 widget iframe 挂在 [data-sitekey] 容器里：src 常常是 about:blank（靠脚本导航），
+        // 光看属性认不出来 —— 位置比 URL 可靠
+        return !!(el.closest && el.closest('[data-sitekey], .cf-turnstile'));
+    }
+    // 先把容器滚到视口中间：上一轮 audiences 的容器在 y=1033，屏幕只有 1080 —— 
+    // 复选框掉在折叠线外，点下去落在空白处，CF 当然不签
+    var cont = document.querySelector('[data-sitekey], .cf-turnstile');
+    if (cont && cont.scrollIntoView) { try { cont.scrollIntoView({block: 'center'}); } catch (e) {} }
     var fr = document.querySelectorAll('iframe');
     for (var i = 0; i < fr.length; i++) {
         if (iscf(fr[i])) {
             fr[i].setAttribute('data-ts', String(i));
-            return {idx: i, box: box(fr[i])};
+            return {idx: i, box: box(fr[i]), host: host(fr[i])};
         }
     }
-    // document.querySelectorAll 看不见 shadow root 里的 iframe —— CF 的 widget 恰好挂在那里，
-    // 上一轮「CF组件=1 却读不到矩形」就是漏在这一层。影子里的 iframe 切换不进去（跨域 + 够不着），
-    // 但矩形照样能量，坐标点击不需要切 frame。
     var hit = null;
     function walk(root, depth){
         if (hit || depth > 4) return;
@@ -314,10 +326,7 @@ return /*outer*/ (function(){
         }
     }
     walk(document, 0);
-    if (hit) return {idx: -2, shadow: 1, box: box(hit)};
-    var q = document.querySelector('.cf-turnstile iframe, [class*="cf-turnstile"] iframe, ' +
-                                   '[id*="turnstile"] iframe');
-    if (q) { q.setAttribute('data-ts', 'q'); return {idx: -1, box: box(q)}; }
+    if (hit) return {idx: -2, shadow: 1, box: box(hit), host: host(hit)};
     return null;
 })()
 """
@@ -357,12 +366,21 @@ return /*shadow*/ (function(){
 # iframe 由脚本渲染，可能落在 open shadow root 里，也可能还没渲染。所以先量结构再动手。
 _TS_DIAG_JS = """
 return /*diag*/ (function(){
-    var out = {ifr: 0, cfifr: 0, shroot: 0, shifr: 0, cfres: -1, api: 0, wid: 'no', tok: -1};
+    var out = {ifr: 0, cfifr: 0, shroot: 0, shifr: 0, cfres: -1, api: 0, wid: 'no', tok: -1,
+               vp: '', kids: 'none', srcs: '', scroll: -1};
+    out.vp = window.innerWidth + 'x' + window.innerHeight;
+    out.scroll = Math.round(window.scrollY || document.documentElement.scrollTop || 0);
     var fs = document.querySelectorAll('iframe');
     out.ifr = fs.length;
-    for (var i = 0; i < fs.length; i++) {
-        var s = fs[i].getAttribute('src') || fs[i].src || '';
-        if (s.indexOf('challenges.cloudflare.com') > -1 || s.indexOf('/turnstile/') > -1) out.cfifr++;
+    for (var i = 0; i < fs.length && i < 4; i++) {
+        var s = fs[i].src || fs[i].getAttribute('src') || '';
+        var m = /^https?:\\/\\/([^\\/]+)/.exec(s);
+        var r = fs[i].getBoundingClientRect();
+        var nm = (fs[i].getAttribute('name') || '').slice(0, 8);
+        if ((m ? m[1] : '').indexOf('challenges.cloudflare.com') > -1) out.cfifr++;
+        out.srcs += '[' + (m ? m[1] : (s ? 'other' : 'blank')) + ' ' + nm +
+                    ' ' + Math.round(r.width) + 'x' + Math.round(r.height) +
+                    '@' + Math.round(r.top) + ']';
     }
     function walk(root, depth){
         if (depth > 4) return;
@@ -371,7 +389,7 @@ return /*diag*/ (function(){
         for (var i = 0; i < els.length; i++) {
             var e = els[i];
             if (e.tagName === 'IFRAME') {
-                var s2 = e.getAttribute('src') || '';
+                var s2 = (e.src || e.getAttribute('src') || '');
                 if (s2.indexOf('challenges.cloudflare.com') > -1) out.shifr++;
             }
             if (e.shadowRoot) { out.shroot++; walk(e.shadowRoot, depth + 1); }
@@ -382,15 +400,23 @@ return /*diag*/ (function(){
         var res = performance.getEntriesByType('resource');
         out.cfres = 0;
         for (var k = 0; k < res.length; k++) {
-            if ((res[k].name || '').indexOf('challenges.cloudflare.com') > -1) out.cfres++;
+            if ((res[k].name || '').indexOf('challenges.cloudflare.com') > -1) {
+                out.cfres++;
+                // responseStatus 是 Resource Timing 的标准字段：能分清「脚本 403 没下来」
+                // 和「脚本下来了但 widget 没渲染」，这两种的修法完全不同
+                if (typeof res[k].responseStatus === 'number') out.srcs += ' st=' + res[k].responseStatus;
+            }
         }
     } catch (e) {}
     out.api = (window.turnstile && (window.turnstile.render || window.turnstile.execute)) ? 1 : 0;
     var w = document.querySelector('.cf-turnstile, [data-sitekey]');
     if (w) {
-        var r = w.getBoundingClientRect();
-        out.wid = (r.width > 0 && r.height > 0) ? (Math.round(r.left) + ',' + Math.round(r.top) +
-                 ' ' + Math.round(r.width) + 'x' + Math.round(r.height)) : 'zero';
+        var r2 = w.getBoundingClientRect();
+        out.wid = (r2.width > 0 && r2.height > 0) ? (Math.round(r2.left) + ',' + Math.round(r2.top) +
+                 ' ' + Math.round(r2.width) + 'x' + Math.round(r2.height)) : 'zero';
+        var ch = [], kids = w.children;
+        for (var j = 0; j < kids.length && j < 5; j++) ch.push(kids[j].tagName);
+        out.kids = ch.length ? ch.join(',') : 'empty';
     }
     var t = document.querySelector('input[name="cf-turnstile-response"]');
     out.tok = t ? (t.value || '').length : -1;
@@ -402,10 +428,10 @@ return /*diag*/ (function(){
 def _fmt_diag(d):
     if not isinstance(d, dict):
         return "探针没返回结构（execute_script 又坏了？）"
-    return (f"顶层iframe={d.get('ifr')} 其中CF={d.get('cfifr')} "
-            f"shadow根={d.get('shroot')} 影子内CFiframe={d.get('shifr')} "
-            f"CF资源条数={d.get('cfres')} turnstile对象={d.get('api')} "
-            f"容器={d.get('wid')} token长度={d.get('tok')}")
+    return (f"视口={d.get('vp')} 滚动={d.get('scroll')} iframe={d.get('ifr')} 其中CF={d.get('cfifr')} "
+            f"{d.get('srcs')} shadow根={d.get('shroot')} 影子内CFiframe={d.get('shifr')} "
+            f"CF资源={d.get('cfres')} turnstile对象={d.get('api')} "
+            f"容器={d.get('wid')} 容器子={d.get('kids')} token长度={d.get('tok')}")
 
 
 def _diag_turnstile(sb):
@@ -419,6 +445,7 @@ _TS_CONTAINER_JS = """
 return /*container*/ (function(){
     var w = document.querySelector('.cf-turnstile, [data-sitekey]');
     if (!w) return null;
+    if (w.scrollIntoView) { try { w.scrollIntoView({block: 'center'}); } catch (e) {} }
     var r = w.getBoundingClientRect();
     if (!(r.width > 0 && r.height > 0)) return null;
     return {x: r.left, y: r.top, w: r.width, h: r.height};
