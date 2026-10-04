@@ -89,6 +89,8 @@ jobs:
         IS_PROXY: "true"
         TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
         TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        BARK_KEY: ${{ secrets.BARK_KEY }}
+        BARK_URL: ${{ secrets.BARK_URL }}
       run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python3 app.py
 
     # [根因] 把本次 run 更新后的 renew_state.json 存回（run_id 唯一键，供下次 restore）。

@@ -8,6 +8,7 @@ import subprocess
 import requests
 import re
 import base64
+import urllib.parse
 from seleniumbase import SB
 
 # ============================================================
@@ -85,15 +86,7 @@ def send_tg_message(status_icon, status_text, time_left=""):
     current_time_str = time.strftime("%Y-%m-%d %H:%M:%S", local_time)
 
     # 邮箱脱敏：保留用户名前2位和后2位，中间用****代替
-    email = CURRENT_EMAIL
-    if '@' in email:
-        name, domain = email.split('@', 1)
-        if len(name) > 4:
-            masked_email = f"{name[:2]}****{name[-2:]}@{domain}"
-        else:
-            masked_email = f"{name}@{domain}"
-    else:
-        masked_email = (email[:2] + '****') if email else "未知"
+    masked_email = mask_email(CURRENT_EMAIL)
 
     # time_left 实际承载面板 alert / 失败详情（历史参数名保留）
     detail = (time_left or "").strip()
@@ -120,6 +113,61 @@ def send_tg_message(status_icon, status_text, time_left=""):
             print(f"⚠️ Telegram 通知发送失败: {r.text}")
     except Exception as e:
         print(f"⚠️ Telegram 通知发送异常: {e}")
+
+
+def mask_email(email):
+    """ab****cd@domain：库是公开的、推送正文还要经过 api.day.app，账户只留这个形状。"""
+    if "@" in email:
+        name, domain = email.split("@", 1)
+        if len(name) > 4:
+            return f"{name[:2]}****{name[-2:]}@{domain}"
+        return f"{name}@{domain}"
+    return (email[:2] + "****") if email else "未知"
+
+
+# ============================================================
+# Bark 推送（iOS）：方法照 PT-Checkin —— GET {BARK_URL}/{key}/{title}/{body}?level=...
+#   只要一个设备键、不用建 bot，所以他这边真正能收到的就是这条渠道。
+#   配了 BARK_KEY 走 Bark，没配才退回 Telegram —— 两条都发会重复打扰，所以不叠加。
+# ============================================================
+BARK_KEY = os.environ.get("BARK_KEY") or ""
+BARK_URL = os.environ.get("BARK_URL") or "https://api.day.app"
+
+
+def send_bark(title, body, critical=False):
+    """发一条 Bark，返回是否发出（没配 key 也算没发）。"""
+    if not BARK_KEY:
+        print("ℹ️ 未配置 BARK_KEY，跳过 Bark 推送。")
+        return False
+    url = "/".join([BARK_URL.rstrip("/"), BARK_KEY,
+                    urllib.parse.quote(str(title), safe=""),
+                    urllib.parse.quote(str(body), safe="")])
+    params = {"sound": "alarm" if critical else "minuet",
+              "icon": "https://github.com/fluidicon.png",
+              "group": "katabump",
+              "level": "critical" if critical else "active"}
+    try:
+        r = requests.get(url, params=params, timeout=10)
+        if r.status_code == 200:
+            print("📩 Bark 推送已送达")
+            return True
+        print(f"⚠️ Bark 推送失败: HTTP {r.status_code} {(r.text or '')[:120]}")
+    except Exception as e:
+        print(f"⚠️ Bark 推送异常: {type(e).__name__}")
+    return False
+
+
+def push_notice(status_icon, status_text, detail="", critical=False, account=""):
+    """续期流程的出口：Bark 优先，退回 TG。正文只有状态、脱敏账户和时间。"""
+    if BARK_KEY:
+        ts = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 8 * 3600))
+        acct = account or CURRENT_EMAIL
+        body = "\n".join(x for x in ((f"👤 {mask_email(acct)}" if acct else ""),
+                                     detail, f"⏱️ {ts}") if x)
+        return send_bark(f"{status_icon} {status_text}", body, critical)
+    send_tg_message(status_icon, status_text, detail)
+    return bool(TG_BOT_TOKEN and TG_CHAT_ID)
+
 
 #  页面注入脚本
 _EXPAND_JS = """
@@ -2152,13 +2200,13 @@ def main():
         if acc_res == RENEW_PASS:
             renewed += 1
             print(f"✅ 账号 {email} 续期成功")
-            send_tg_message(icon, atext, acc_detail or "续期成功")
+            push_notice(icon, atext, acc_detail or "续期成功")
         elif should_alert:
             # 真·问题：suspended / 流程未跑通 / 临近到期未确认续上 → 红告警 + Actions 失败
             failed += 1
             extra = f"（剩 {acc_rdays} 天）" if acc_res == RENEW_UNCONFIRMED and acc_rdays is not None else ""
             print(f"❌ 账号 {email} {atext}{extra}（{acc_res}）：{acc_detail or ''}")
-            send_tg_message(icon, atext, f"{email} {acc_res} | {acc_detail}")
+            push_notice(icon, atext, f"{mask_email(email)} {acc_res} | {acc_detail}", critical=True)
         else:
             # 健康冷却期 / 无天数 unconfirmed：用户当下处理不了（到期日未知/未到），
             # 且真死由 suspended 硬告警兜底 → 静默，仅记日志，不发 TG、不因 CI 失败。

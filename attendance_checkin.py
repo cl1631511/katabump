@@ -112,14 +112,20 @@ _BLOCKED_MARK = ("just a moment", "checking your browser", "cf-chl",
                  "安全检测能力由雷池waf驱动", "雷池waf", "attention required!")
 
 
-def notify(lines, alert):
-    """一屏汇总所有站点；alert=True 表示其中有真问题。"""
-    if not TG_BOT_TOKEN or not TG_CHAT_ID or requests is None:
-        print("ℹ️ 未配置 TG_BOT_TOKEN 或 TG_CHAT_ID（或缺 requests），跳过 Telegram 推送。")
-        return
+def notify(lines, alert, all_already=False):
+    """一屏汇总所有站点；alert=True 表示其中有真问题。
+    渠道照 PT-Checkin：Bark 优先（复用 app.py 里那一份实现，续期和签到共用），退回 Telegram。"""
     ts = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 8 * 3600))
-    head = "⚠️ 签到异常" if alert else "✅ 签到成功"
-    text = f"🎫 PT 每日签到\n\n{head}\n" + "\n".join(lines) + f"\n⏱️ 时间: {ts}"
+    head = ("⚠️ 签到异常" if alert else
+            "✅ 今日均已签到" if all_already else "✅ 签到成功")
+    body = "\n".join(lines) + f"\n⏱️ 时间: {ts}"
+    if core is not None and getattr(core, "BARK_KEY", ""):
+        core.send_bark(f"🎫 PT 每日签到 {head}", body, alert)
+        return
+    if not TG_BOT_TOKEN or not TG_CHAT_ID or requests is None:
+        print("ℹ️ BARK_KEY 和 TG_BOT_TOKEN/TG_CHAT_ID 都没配，结果只在 CI 日志里。")
+        return
+    text = f"🎫 PT 每日签到\n\n{head}\n" + body
     try:
         r = requests.post(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage",
                           json={"chat_id": TG_CHAT_ID, "text": text}, timeout=10)
@@ -1119,7 +1125,7 @@ _ALERT = (CHK_NO_SESSION, CHK_VERIFY_FAIL, CHK_UNKNOWN)
 # 自检回路的白名单：只有这些前缀的行才被推到公开分支上。
 # 用白名单不用黑名单 —— 以后新加的 print 默认不进证据，看过确认没有账号信息才放进来。
 _LOG_KEEP = ("#", "=", "🔗", "🌐", "🎬", "📍", "🍪", "✅", "⏳", "ℹ️", "❌", "⚠️",
-             "🔎", "🧩", "📨", "🖱️", "🧾", "─", "完毕", "PT 每日签到")
+             "🔎", "🧩", "📨", "🖱️", "🧾", "📩", "─", "完毕", "PT 每日签到")
 
 
 def sanitize_log(text):
@@ -1189,7 +1195,7 @@ def main():
     else:
         print("🌐 未使用代理，直连访问")
 
-    lines, alert, quiet = [], False, True
+    lines, alert, all_already = [], False, True
     for site in sites:
         print("\n" + "=" * 25)
         print(f"  {site.label}")
@@ -1198,22 +1204,21 @@ def main():
         icon, text = _STATUS_LINE[status]
         # 公开仓库的 CI 日志也是公开的：成功态不带页面原文，失败态才带（原文里可能有账号名）
         line = f"{icon} {site.label} {text}" + (f"：{detail}" if detail and status in _ALERT else "")
-        print(line)   # 无论有没有配 TG，日志里都得看得到原因
+        print(line)   # 无论有没有配推送渠道，日志里都得看得到原因
         lines.append(line)
         if status in _ALERT:
             alert = True
         if status != CHK_ALREADY:
-            quiet = False
+            all_already = False
         if status == CHK_UNKNOWN:
             print(f"（{site.key} 的措辞线索已在上方 🧾 行打印，若一个都没命中需扩 _CLUE_WORDS 再校准关键词）")
 
     print("\n" + "#" * 25)
     print("  完毕：" + " | ".join(f"{s.key}={l.split(' ', 1)[0]}" for s, l in zip(sites, lines)))
     print("#" * 25)
-    if alert or not quiet:
-        notify(lines, alert)
-    else:
-        print("⏳ 全部站点今日已签到，静默。")
+    # PT-Checkin 的做法是每轮都推一条汇总，不再「今日都已签到就静默」——
+    # 收到通知本身就是「今天的签到没漏」的证据。
+    notify(lines, alert, all_already)
     if alert:
         raise SystemExit(1)
 

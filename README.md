@@ -28,11 +28,13 @@
     - hy2: `hy2://password@host:port?sni=xxx`
     - socks5: `socks5://user:pass@host:port`
 
-6. **(可选) Telegram 消息推送**:
-   如果你希望在续期成功、失败或跳过时收到 Telegram 通知（包含截图），请配置以下 Secret：
-   - `TG_BOT_TOKEN`: 你的 Telegram Bot Token (从 @BotFather 获取)。
-   - `TG_CHAT_ID`: 你的 Chat ID (用户 ID 或群组 ID)。
-   > 如果未配置，脚本将跳过发送通知。
+6. **(可选) 消息推送**:
+   两条流水线（续期 + 签到）都走同一个出口：**Bark 优先，没配 Bark 才退回 Telegram**。
+   - `BARK_KEY`: iOS [Bark](https://apps.apple.com/app/id1403753865) App 里那串设备键。
+   - `BARK_URL`: 自建服务地址，不填就用默认的 `https://api.day.app`。
+   - `TG_BOT_TOKEN` / `TG_CHAT_ID`: Telegram Bot Token (从 @BotFather 获取) 和 Chat ID。
+   > 都没配就只留 CI 日志，脚本不会因此失败。配了 Bark 就不会再发 TG，同一件事只打扰一次。
+   > 推送正文里账户一律脱敏成 `ab****cd@domain`，不含密码、cookie 或 IP。
 
 ### 4. 运行结果与截图
 
@@ -51,7 +53,8 @@
 
 已接入站点：**audiences.me**、**mua.xloli.cc**（都在 `attendance.php`）。两站机制同构 ——
 「登录态 cookie + Cloudflare Turnstile」，签到就是把 token 交回表单，没有别的动作。
-本仓库已有 Turnstile 绕过和 sing-box 出口池，签到直接复用，`app.py` 未改动。
+本仓库已有 Turnstile 绕过和 sing-box 出口池，签到直接复用（推送也直接复用 `app.py` 里那份
+Bark 实现，续期和签到共用一条渠道代码）。
 
 1. **取 Cookie**（一次即可，失效再换）：浏览器登录该站 → F12 → **Network** → 刷新
    `attendance.php` → 点该请求 → **Request Headers** 里的整条 `Cookie` 值复制出来。
@@ -65,12 +68,13 @@
    `cf_clearance` 可不带 —— 它是 IP/UA 绑定的，CI 出口和浏览器不一样，过期了浏览器会自己重新过 CF。
    缺哪个站 secret 就只有那个站报红，另一站照签。
 3. **Workflow**：`.github/workflows/attendance.yml`，每天北京时间 09:17 逐站串行跑，
-   与续期共用 `PROXY_URL` / `PROXY_CHAIN_URL` / `TG_BOT_TOKEN` / `TG_CHAT_ID`。
+   与续期共用 `PROXY_URL` / `PROXY_CHAIN_URL` / `BARK_KEY` / `BARK_URL` / `TG_BOT_TOKEN` / `TG_CHAT_ID`。
    手动触发：Actions → PT Attendance Check-in → Run workflow；只想跑一站就在 step env 加
    `CHECKIN_SITES: "mua"`。
-4. **判定规则**：签到成功 ✅ 通知；今日已签 ⏳ 静默；cookie 失效 / 人机验证没过 / 流程没跑通
-   → ❌ 告警 + CI 红灯。TG 一条消息汇总所有站点。读不出结果时一律报红（宁红不绿），绝不因为
-   「页面上没看到签到入口」就当作已经签好。
+4. **判定规则**：签到成功 ✅；今日已签 ⏳；cookie 失效 / 人机验证没过 / 流程没跑通
+   → ❌ 告警 + CI 红灯。**每轮都推一条**汇总所有站点（照 PT-Checkin 的做法：收到通知就等于
+   「今天的签到没漏」，收不到才该去查），全员已签的那轮标题写「今日均已签到」而不是「签到成功」。
+   读不出结果时一律报红（宁红不绿），绝不因为「页面上没看到签到入口」就当作已经签好。
 5. **看某一轮到底走到哪一步**：库是公开的，页面原文（含账号名）不进仓库、也不上传 artifact。
    workflow 每轮把日志按白名单洗一遍（`python3 attendance_checkin.py --sanitize-log checkin.log`），
    推到 `checkin-evidence` 分支的 `checkin-evidence.md`；本地 `git fetch origin checkin-evidence`

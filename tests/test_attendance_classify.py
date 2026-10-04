@@ -175,4 +175,90 @@ ok("已经签到" in clue and "明天" in clue and "爆米花" in clue, "L6 站�
 ok("🧾" in clue and "正文" in clue, "L7 🧾 行带长度、且能被 sanitize_log 白名单认出")
 ok("已经签到" in aud.sanitize_log(clue), "L8 🧾 行能进证据（不会被清洗丢掉）")
 
+# ── 9. 推送渠道：Bark 优先、退回 Telegram（方法照 PT-Checkin，一条实现两边共用）──
+import urllib.parse
+
+GETS, POSTS = [], []
+
+
+class _Resp:
+    status_code = 200
+    text = "OK"
+
+
+def _fake_get(url, params=None, timeout=None, **kw):
+    GETS.append((url, params))
+    return _Resp()
+
+
+def _fake_post(url, json=None, timeout=None, **kw):
+    POSTS.append((url, json))
+    return _Resp()
+
+
+req.get, req.post = _fake_get, _fake_post
+app_mod.BARK_KEY, app_mod.BARK_URL = "fakeDeviceKey", "https://api.day.app"
+
+ok(app_mod.send_bark("标题 A", "正文\n两行", critical=True) is True, "B1 Bark 发出即算成功")
+u, p = GETS[-1]
+ok(u == "/".join([app_mod.BARK_URL, "fakeDeviceKey",
+                  urllib.parse.quote("标题 A", safe=""),
+                  urllib.parse.quote("正文\n两行", safe="")]),
+   "B2 URL 形状 = {base}/{key}/{title}/{body}（PT-Checkin 同款）")
+ok(p["level"] == "critical" and p["group"] == "katabump", "B3 告警是 critical 级、同一分组")
+ok(app_mod.send_bark("t", "b") and GETS[-1][1]["level"] == "active", "B4 平时是 active 级（会响但不弹横幅遮挡）")
+
+# 账户身份：推送正文要经过 api.day.app，所以只允许掩码形状出现
+GETS.clear(), POSTS.clear()
+app_mod.CURRENT_EMAIL = "some_user_9527@example.com"
+aud.TG_BOT_TOKEN, aud.TG_CHAT_ID = "fakeBot", "fakeChat"
+ok(app_mod.push_notice("✅", "续期成功", "续期成功"), "B5 配了 BARK_KEY 就发 Bark")
+ok(len(GETS) == 1 and not POSTS, "B6 有 Bark 就不再叠加 Telegram（同一件事只打扰一次）")
+sent = urllib.parse.unquote(GETS[0][0])
+ok("some_user_9527@example.com" not in sent, "B7 推送里绝不含完整邮箱")
+ok("so****27@example.com" in sent, "B8 只有掩码形状（前二后二）")
+ok(app_mod.mask_email("ab@x.com") == "ab@x.com" and app_mod.mask_email("") == "未知",
+   "B9 短本地名不硬掩、空值不崩")
+
+GETS.clear(), POSTS.clear()
+app_mod.BARK_KEY = ""
+app_mod.TG_BOT_TOKEN, app_mod.TG_CHAT_ID = "fakeBot", "fakeChat"
+app_mod.push_notice("❌", "续期异常", "x", critical=True)
+ok(not GETS and len(POSTS) == 1, "B10 没配 Bark 才退回 Telegram")
+ok("some_user_9527" not in str(POSTS[0][1]), "B11 TG 那条同样只有掩码")
+
+# 签到侧复用同一份实现
+GETS.clear(), POSTS.clear()
+app_mod.BARK_KEY = "fakeDeviceKey"
+aud.notify(["✅ 🎬 audiences.me 签到成功", "⏳ 🍥 mua.xloli.cc 今日已签到"], alert=False)
+ok(len(GETS) == 1 and not POSTS, "B12 签到也走 Bark，且用的就是 core.send_bark")
+ok("PT 每日签到" in urllib.parse.unquote(GETS[0][0]), "B13 标题带业务名")
+GETS.clear()
+aud.notify(["❌ 🎬 audiences.me 登录态失效"], alert=True)
+ok(GETS[0][1]["level"] == "critical", "B14 签到异常 = critical")
+GETS.clear()
+aud.notify(["⏳ 🎬 audiences.me 今日已签到", "⏳ 🍥 mua.xloli.cc 今日已签到"], False, all_already=True)
+ok("今日均已签到" in urllib.parse.unquote(GETS[0][0]), "B15 全员已签到要说「均已签到」，不是「签到成功」")
+
+GETS.clear(), POSTS.clear()
+app_mod.BARK_KEY, aud.TG_BOT_TOKEN = "", ""
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    aud.notify(["✅ 🎬 audiences.me 签到成功"], False)
+ok(not GETS and not POSTS and "都没配" in buf.getvalue(), "B16 两个渠道都没配 -> 结果只在 CI 日志里，且把这话说明白")
+ok("📩" in aud.sanitize_log("📩 Bark 推送已送达"),
+   "B17 推送结果行得进公开证据，否则我这边永远看不到「这轮到底发出去没有」")
+
+# 「每轮都提醒」是这次的要点：今日都已签到也不能静默
+GETS.clear()
+app_mod.BARK_KEY = "fakeDeviceKey"
+_real_run_site = aud.run_site
+aud.run_site = lambda sb_kwargs, site: (aud.CHK_ALREADY, "")
+try:
+    with contextlib.redirect_stdout(io.StringIO()):
+        aud.main()
+finally:
+    aud.run_site = _real_run_site
+ok(len(GETS) == 1, "B18 全员已签到那一轮照样推一条（收到=今天没漏，没收到=该查）")
+
 print("\nALL OK")
