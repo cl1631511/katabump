@@ -141,4 +141,33 @@ ok(aud.session_ok([("c_secure_pass", "x")], SITE_M), "mua: c_secure_pass 即算�
 ok(aud.parse_cookie_header("c_secure_uid=ZmFrZVVpZA%3D%3D") == [("c_secure_uid", "ZmFrZVVpZA%3D%3D")],
    "URL 编码值原样保留（不能把 %3D 当分隔符）")
 
+# ===== 自检回路的日志清洗（证据要推到公开的 checkin-evidence 分支）=====
+LOG = """📍  当前出口IP: 203.0.113.7
+🔎 首枪后页面特征: 我的空间/退出链接=1 正文长度=820
+随机一行页面原文：some_user_9527 同学 今日签到记录
+📨 提交签到表单: submitted
+🍪 首次请求前 写入成功 2/2: c_secure_uid, c_secure_pass"""
+out = aud.sanitize_log(LOG)
+ok("🔎 首枪后页面特征" in out and "📨 提交签到表单" in out and "🍪" in out,
+   "L1 状态/计数行才留下")
+ok("同学" not in out and "some_user_9527" not in out, "L2 不在白名单里的行一律不进证据")
+ok("203.0.113.7" not in out and "203.0.113.*" in out, "L3 出口 IP 只留前三段")
+ok(aud.sanitize_log("📨 token 是 " + "a" * 40).count("a") < 25,
+   "L4 万一冒出一串凭证形状的东西，打码")
+
+# ===== 措辞线索（取代 artifact：库是公开的，页面原文连本地文件都不留）=====
+import contextlib
+import io
+
+BODY = ("some_user_9527 同学，今日已经签到，请明天再来吧。"
+        "签到成功可获得 22 粒爆米花")
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    aud._dump_evidence(SITE_A, BODY)
+clue = buf.getvalue()
+ok("some_user_9527" not in clue and "同学" not in clue, "L5 🧾 只报词汇，账号名不在里面")
+ok("已经签到" in clue and "明天" in clue and "爆米花" in clue, "L6 站点词汇照常上报")
+ok("🧾" in clue and "正文" in clue, "L7 🧾 行带长度、且能被 sanitize_log 白名单认出")
+ok("已经签到" in aud.sanitize_log(clue), "L8 🧾 行能进证据（不会被清洗丢掉）")
+
 print("\nALL OK")

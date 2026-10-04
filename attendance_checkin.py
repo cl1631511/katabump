@@ -9,10 +9,14 @@
 脚本对两种都走同一条路：有按钮点按钮，没按钮才 form.submit()。
 
 复用 katabump 的现成设施，app.py 一行不改：
-  - core.handle_turnstile : Cloudflare Turnstile 四策略绕过（两站用的是同一个 widget，
-    判定通过所依赖的 input[name="cf-turnstile-response"] 由 Turnstile API 自动插入）。
+  - core._cdp            : Network.setCookie（首枪前种 cookie）+ Input.dispatchMouseEvent（原生点击）
+  - core._install_turnstile_hook_cdp / core._egress_unusable
   - core._restart_proxy / core._pool_size : 同一份 PROXY_URL secret、同一个 sing-box 出口池。
   - import core 时 app.py 顶层已装好日志脱敏过滤器，本脚本的 print 一并被遮蔽。
+
+Turnstile 点击自己实现（见 _solve_turnstile），不调用 core.handle_turnstile —— 它依赖的
+那几个 app.py 探针 JS 是裸 IIFE、顶层没有 return，execute_script 一律返回 None，
+于是四策略全瞎、只剩盲点兜底。续费流程在用那条老路，动它风险大，所以这里另写一段有硬上限的。
 
 登录方式：注入浏览器已登录的 cookie。不走 login.php —— 那里的图形验证码在 CI 里无人可填。
 """
@@ -271,6 +275,180 @@ return (function(){
 """
 
 
+# ===== 自己点 Turnstile 复选框 =====
+# 复选框在跨域 iframe 的 shadow DOM 里：普通选择器看不到，JS dispatchEvent 的事件
+# isTrusted=false 会被 CF 直接拒。所以先把「外层 challenge iframe 在视口里的矩形」和
+# 「内层 widget iframe 在外层里的矩形」相加，再用 CDP Input.dispatchMouseEvent 点它中心
+# —— CDP 的事件走浏览器输入管线，是真事件。
+# 这些脚本全部自己写、全部顶层 return：app.py 里同类的 _IFRAME_MAP_JS/_TURNSTILE_BBOX_JS
+# 是裸 IIFE，execute_script 只会给 None，所以那边的定位/坐标策略在真浏览器里从来没生效过，
+# handle_turnstile 才会退化成盲点 4 次、每轮几十秒。
+_TS_OUTER_JS = """
+return /*outer*/ (function(){
+    function box(el){ var r = el.getBoundingClientRect();
+        return {x: r.left, y: r.top, w: r.width, h: r.height}; }
+    var fr = document.querySelectorAll('iframe');
+    for (var i = 0; i < fr.length; i++) {
+        var s = fr[i].src || '', c = fr[i].className || '', id = fr[i].id || '';
+        if (s.indexOf('challenges.cloudflare.com') > -1 || s.indexOf('/turnstile/') > -1 ||
+            c.indexOf('turnstile') > -1 || id.indexOf('turnstile') > -1) {
+            fr[i].setAttribute('data-ts', String(i));
+            return {idx: i, box: box(fr[i])};
+        }
+    }
+    var q = document.querySelector('.cf-turnstile iframe, [class*="cf-turnstile"] iframe, ' +
+                                   '[id*="turnstile"] iframe');
+    if (q) { q.setAttribute('data-ts', 'q'); return {idx: -1, box: box(q)}; }
+    return null;
+})()
+"""
+
+# 切进外层 challenge iframe 后，它内部那个 widget iframe 是同源的，看得见
+_TS_INNER_JS = """
+return /*inner*/ (function(){
+    var f = document.querySelector('iframe');
+    if (!f) return null;
+    var r = f.getBoundingClientRect();
+    return {x: r.left, y: r.top, w: r.width, h: r.height};
+})()
+"""
+
+# 备用招：穿透 open shadow root 摸到 checkbox 调 .click()（浏览器自己产生的 click 算真事件）
+_TS_SHADOW_CLICK_JS = """
+return /*shadow*/ (function(){
+    var hit = null;
+    function walk(root){
+        var els = root.querySelectorAll('*');
+        for (var i = 0; i < els.length && !hit; i++) {
+            var e = els[i];
+            if (e.tagName === 'INPUT' && e.type === 'checkbox') { hit = e; return; }
+            if (e.shadowRoot) walk(e.shadowRoot);
+        }
+    }
+    walk(document);
+    if (!hit) return 'no-checkbox';
+    hit.click();
+    return 'shadow-clicked';
+})()
+"""
+
+
+def _ts_point(sb):
+    """Turnstile 复选框在顶层视口的 CSS 像素坐标；拿不到给 None。"""
+    try:
+        top = sb.driver.execute_script(_TS_OUTER_JS)
+    except Exception:
+        return None
+    if not isinstance(top, dict) or not isinstance(top.get("box"), dict):
+        return None
+    b = top["box"]
+    inner = None
+    try:
+        els = sb.driver.find_elements("css selector", "iframe[data-ts]")
+        if els:
+            sb.driver.switch_to.frame(els[0])
+            got = sb.driver.execute_script(_TS_INNER_JS)
+            inner = got if isinstance(got, dict) else None
+    except Exception:
+        inner = None
+    finally:
+        try:
+            sb.driver.switch_to.default_content()
+        except Exception:
+            pass
+    if inner and inner.get("w"):
+        return (b["x"] + inner["x"] + inner["w"] / 2.0,
+                b["y"] + inner["y"] + inner["h"] / 2.0)
+    # 只看到外框：CF 那一整行都可点，取偏左的位置比正中心更靠近那个圆圈
+    return (b["x"] + min(34.0, max(1.0, b["w"] * 0.35)), b["y"] + b["h"] / 2.0)
+
+
+def _click_turnstile(sb):
+    """发一次原生鼠标点击。返回是否发出去（不代表验证过了）。"""
+    pt = _ts_point(sb)
+    if pt is None:
+        print("  ⚠️ 定位不到 Turnstile 复选框（iframe 读不到矩形）")
+        return False
+    cx, cy = int(pt[0]), int(pt[1])
+    if not (0 < cx < 20000 and 0 < cy < 20000):
+        print(f"  ⚠️ 复选框坐标不可点: ({cx},{cy})")
+        return False
+    print(f"🖱️ [CDP] 原生点击 Turnstile 复选框 ({cx},{cy})")
+    try:
+        # 先挪两下鼠标：CF 会看点击前有没有真实的指针移动
+        for mv in ((cx - 12, cy - 7), (cx - 3, cy - 1)):
+            core._cdp(sb, "Input.dispatchMouseEvent",
+                      {"type": "mouseMoved", "x": mv[0], "y": mv[1]})
+            time.sleep(0.05)
+        for t in ("mousePressed", "mouseReleased"):
+            core._cdp(sb, "Input.dispatchMouseEvent",
+                      {"type": t, "x": cx, "y": cy, "button": "left", "clickCount": 1})
+            time.sleep(0.06)
+        return True
+    except Exception as e:
+        print(f"  ⚠️ [CDP] 点击没发出去: {type(e).__name__}")
+        return False
+
+
+def _shadow_click(sb):
+    """逐层切进 iframe，从 shadow DOM 里摸到 checkbox 自己点。找不到就返回 False。"""
+    try:
+        for _ in range(3):
+            try:
+                if sb.driver.execute_script(_TS_SHADOW_CLICK_JS) == "shadow-clicked":
+                    print("🖱️ [shadow] 摸到 checkbox，已用元素自己的 click() 点掉")
+                    return True
+            except Exception:
+                pass
+            try:
+                frames = sb.driver.find_elements("css selector", "iframe")
+                if not frames:
+                    return False
+                sb.driver.switch_to.frame(frames[0])
+            except Exception:
+                return False
+        return False
+    finally:
+        try:
+            sb.driver.switch_to.default_content()
+        except Exception:
+            pass
+
+
+def _wait_token(sb, secs, label=""):
+    for _ in range(secs):
+        tok = _read_token(sb)
+        if tok:
+            print(f"✅ 拿到 Turnstile token{label}")
+            return tok
+        time.sleep(1)
+    return ""
+
+
+def _solve_turnstile(sb):
+    """拿 token：先等站点静默签发，等不到就自己点（坐标点一次、shadow 点一次）。
+
+    返回 token 字符串 / ''（点过了还是没 token）/ None（页上没组件，没得点）。
+    整段有硬上限（约 6 + 2×12 秒），不再调用 core.handle_turnstile —— 那边的 iframe 定位
+    探针是坏的，会退化成盲点 uc_gui 4 次、每轮几十秒，签到卡 13 分钟就是这么来的。
+    """
+    tok = _wait_token(sb, 6, "（静默签发）")
+    if tok:
+        return tok
+    for attempt in (1, 2):
+        sig = _page_signals(sb)
+        if not (sig and (sig["widget"] or sig["cf"])):
+            print("⚠️ 页面上没有 Turnstile 组件、也没签发 token —— 不做点击尝试")
+            return None
+        print(f"🧩 第 {attempt} 次尝试过验证...")
+        (_click_turnstile if attempt == 1 else _shadow_click)(sb)
+        tok = _wait_token(sb, 12, f"（第 {attempt} 次点击后）")
+        if tok:
+            return tok
+    print("❌ 点过两次仍没有 token")
+    return ""
+
+
 def _body_text(sb):
     try:
         return sb.execute_script(_BODY_TEXT_JS) or ""
@@ -426,61 +604,26 @@ def _read_token(sb):
         return ""
 
 
-def _solve_turnstile(sb):
-    """等 token；确实有 widget 才调用 katabump 的绕过。
-
-    返回：token 字符串 / ''（点了还是没 token）/ None（页上没有验证组件，没得点）。
-
-    这里刻意不用 core._turnstile_token_ok / _turnstile_present —— 那两个探针的 JS 是裸 IIFE
-    （app.py 的 _SOLVED_JS/_EXISTS_JS），execute_script 拿到的恒是 None，所以它们在真浏览器里
-    永远报「没有」。改用自己写的 _read_token / _page_signals（顶层带 return，形状是验过的）。
-    """
-    for i in range(10):
-        tok = _read_token(sb)
-        if tok:
-            print(f"✅ 已拿到 Turnstile token（{i + 1}s）")
-            return tok
-        sig = _page_signals(sb)
-        if sig and (sig["widget"] or sig["cf"]):
-            print(f"✅ 检测到 Turnstile 组件（{i + 1}s）")
-            break
-        time.sleep(1)
-    else:
-        # 10s 内既没 token 也没组件：页上没东西可点。去跑 uc_gui 点击只会白烧十分钟
-        # （2026-10-05 那次「卡在这里很久了」就是这么卡的），直接交回上层报读不出结果。
-        print("⚠️ 10s 内页上没有 Turnstile 组件、也没静默签发 token —— 不做点击尝试")
-        return None
-    if not _read_token(sb) and not core.handle_turnstile(sb):
-        print("❌ Turnstile 未通过")
-        return ""
-    for _ in range(6):
-        if _read_token(sb):
-            break
-        time.sleep(1)
-    return _read_token(sb)
-
-
-def _first_result_line(body):
-    """取页面里第一条像结果的短行，供 TG 详情/日志用。"""
-    skip = ("每日签到", "签到奖励规则", "连续签到加成", "签到 - Powered", "魔力加成")
-    for line in (body or "").splitlines():
-        t = line.strip()
-        if not t or len(t) > 80:
-            continue
-        if any(s in t for s in skip):
-            continue
-        if any(k in t for k in _SUCCESS_KW + _ALREADY_KW + _FAIL_KW):
-            return t
+def _kw_detail(body):
+    """命中了哪个关键词就报哪个词，不返回整行 —— 站点原话里会带账号名。"""
+    for kw in _SUCCESS_KW + _ALREADY_KW + _FAIL_KW:
+        if kw in (body or ""):
+            return f"命中措辞「{kw}」"
     return ""
 
 
+# 校准关键词用的「措辞线索」：只报告站点词汇表里哪些词出现了，绝不打印页面原文。
+# 公开库里连 CI 日志都是公开的，正文里那句「xxx 同学」必须留在 runner 里。
+_CLUE_WORDS = ("成功", "已签到", "已经签到", "重复", "明天", "明日", "再来",
+               "获得", "奖励", "连续", "爆米花", "魔力", "积分", "签到",
+               "验证", "失败", "错误", "请先", "抱歉", "已超过")
+
+
 def _dump_evidence(site, body):
-    """关键词没命中时把页面文本留成 artifact，供校准 _SUCCESS_KW/_FAIL_KW。"""
-    try:
-        with open(f"attendance_result_{site.key}.txt", "w", encoding="utf-8") as f:
-            f.write(body or "(空)")
-    except Exception:
-        pass
+    """把「什么样的措辞在场」打成一行白名单日志，取代以前写 artifact 的做法。"""
+    hits = [w for w in _CLUE_WORDS if w in (body or "")]
+    print(f"🧾 {site.key} 措辞线索: {'/'.join(hits) or '（一个都没命中）'}"
+          f"（正文 {len(body or '')} 字）")
 
 
 def _jar_names(sb):
@@ -592,7 +735,7 @@ def checkin(sb_kwargs, site, pairs):
                 shot("result")
                 _dump_evidence(site, text)
                 print("ℹ️ 页面已显示签到结果，跳过提交")
-                return (st, _first_result_line(text) or "签到页已反映结果")
+                return (st, _kw_detail(text) or "签到页已反映结果")
 
             # 入口和结果措辞都可能是 JS 后渲染的（CF 组件尤其慢），先等页面稳定再判
             entry, text, sig2 = _wait_for_outcome(sb, _page_signals(sb) or sig)
@@ -603,7 +746,7 @@ def checkin(sb_kwargs, site, pairs):
             if st in (CHK_PASS, CHK_ALREADY, CHK_VERIFY_FAIL):
                 shot("result")
                 _dump_evidence(site, text)
-                return (st, _first_result_line(text) or "签到页已反映结果")
+                return (st, _kw_detail(text) or "签到页已反映结果")
             if not entry:
                 # 上一版在这里报 PASS（「入口不在大概就是签好了」），结果 mua 根本没点过按钮 —— 
                 # 读不懂就报红，绝不猜绿。
@@ -650,7 +793,7 @@ def checkin(sb_kwargs, site, pairs):
                 if st != CHK_UNKNOWN:
                     shot("result")
                     _dump_evidence(site, body)
-                    line = _first_result_line(body)
+                    line = _kw_detail(body)
                     if st == CHK_PASS and not line:
                         # 成功措辞还没有真实样本，这一路靠「我们提交过 + 入口消失了」判定；
                         # 把判定依据原话写进日志，别让人以为页面真的印了「签到成功」。
@@ -767,8 +910,43 @@ _STATUS_LINE = {
 }
 _ALERT = (CHK_NO_SESSION, CHK_VERIFY_FAIL, CHK_UNKNOWN)
 
+# 自检回路的白名单：只有这些前缀的行才被推到公开分支上。
+# 用白名单不用黑名单 —— 以后新加的 print 默认不进证据，看过确认没有账号信息才放进来。
+_LOG_KEEP = ("#", "=", "🔗", "🌐", "🎬", "📍", "🍪", "✅", "⏳", "ℹ️", "❌", "⚠️",
+             "🔎", "🧩", "📨", "🖱️", "🧾", "📄", "─", "完毕", "PT 每日签到")
+
+
+def sanitize_log(text):
+    """把运行日志削成「只剩状态和计数」的版本，供 CI 之后我自己读结果用。
+
+    库是公开的，日志里除了状态机不该有别的：出口 IP 打掉后两段，长串（token/cookie 形状）
+    一律替换，页面原文本来就不 print（🧾 行只报站点词汇，见 _CLUE_WORDS）。
+    """
+    out = []
+    for line in (text or "").splitlines():
+        s = line.strip()
+        if not s or not any(s.startswith(k) for k in _LOG_KEEP):
+            continue
+        s = re.sub(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}\b", r"\1.*", s)
+        s = re.sub(r"[A-Za-z0-9_+/=-]{25,}", "<长串已打码>", s)
+        out.append(s)
+    return "\n".join(out)
+
+
+def _sanitize_cli(argv):
+    """--sanitize-log <文件>：把日志洗一遍打到 stdout，供 workflow 重定向成证据。"""
+    try:
+        raw = open(argv[argv.index("--sanitize-log") + 1], encoding="utf-8", errors="replace").read()
+    except (IndexError, OSError) as e:
+        print(f"❌ --sanitize-log 用法：<脱敏后的日志文件>（{type(e).__name__}）")
+        raise SystemExit(1)
+    print(sanitize_log(raw))
+    raise SystemExit(0)
+
 
 def main():
+    if "--sanitize-log" in sys.argv:
+        _sanitize_cli(sys.argv)
     print("#" * 25)
     print("   PT 每日签到（attendance.php）")
     print("#" * 25)
@@ -820,8 +998,8 @@ def main():
             alert = True
         if status != CHK_ALREADY:
             quiet = False
-        if status == CHK_UNKNOWN and os.path.exists(f"attendance_result_{site.key}.txt"):
-            print(f"📄 未命中关键词时的页面文本见 artifact: attendance_result_{site.key}.txt")
+        if status == CHK_UNKNOWN:
+            print(f"（{site.key} 的措辞线索已在上方 🧾 行打印，若一个都没命中需扩 _CLUE_WORDS 再校准关键词）")
 
     print("\n" + "#" * 25)
     print("  完毕：" + " | ".join(f"{s.key}={l.split(' ', 1)[0]}" for s, l in zip(sites, lines)))

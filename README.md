@@ -69,12 +69,17 @@
    手动触发：Actions → PT Attendance Check-in → Run workflow；只想跑一站就在 step env 加
    `CHECKIN_SITES: "mua"`。
 4. **判定规则**：签到成功 ✅ 通知；今日已签 ⏳ 静默；cookie 失效 / 人机验证没过 / 流程没跑通
-   → ❌ 告警 + CI 红灯。TG 一条消息汇总所有站点。结果页措辞未知时会把页面文本存成 artifact
-   `attendance-evidence`（`attendance_result_<站点>.txt` + `attendance_<站点>_*.png`），据此再收紧关键词。
-5. **加新站点**：在 `attendance_checkin.py` 的 `SITES` 表里加一条（key/域名/cookie 环境变量名/
+   → ❌ 告警 + CI 红灯。TG 一条消息汇总所有站点。读不出结果时一律报红（宁红不绿），绝不因为
+   「页面上没看到签到入口」就当作已经签好。
+5. **看某一轮到底走到哪一步**：库是公开的，页面原文（含账号名）不进仓库、也不上传 artifact。
+   workflow 每轮把日志按白名单洗一遍（`python3 attendance_checkin.py --sanitize-log checkin.log`），
+   推到 `checkin-evidence` 分支的 `checkin-evidence.md`；本地 `git fetch origin checkin-evidence`
+   就能读到。留下的只有状态行、结构计数（🔎）、措辞线索（🧾 只报站点词汇表里的词）和打码后的
+   出口 IP 前三段。
+6. **加新站点**：在 `attendance_checkin.py` 的 `SITES` 表里加一条（key/域名/cookie 环境变量名/
    必需的登录 cookie 字段），再配同名 secret。表单结构两种都认：有提交按钮就点按钮
    （mua），没按钮靠 widget 回调自动提交（audiences）。
-6. **本地调试**（PowerShell）：先只验 cookie 粘得对不对（不开浏览器、不打印码值），再真跑
+7. **本地调试**（PowerShell）：先只验 cookie 粘得对不对（不开浏览器、不打印码值），再真跑
    ```powershell
    $env:AUDIENCES_COOKIE="c_secure_uid=...; c_secure_pass=..."
    $env:MUA_COOKIE="c_secure_pass=..."
@@ -85,7 +90,7 @@
    `--cookie-probe` 用来分清「cookie 过期」和「站点绑定出口 IP/UA」：在能正常登录的机器上
    直连跑一次，再 `$env:IS_PROXY="true"; $env:PROXY_SERVER="http://127.0.0.1:8080"` 走代理跑一次，
    两边结果一对就知道是哪一种。只打印状态码、最终主机和布尔标志，不打印页面原文。
-7. **回归测试**（不需要浏览器/网络）：
+8. **回归测试**（不需要浏览器/网络）：
    ```powershell
    python tests/test_attendance_classify.py
    python tests/test_attendance_flow.py

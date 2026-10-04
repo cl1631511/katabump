@@ -5,10 +5,19 @@ on:
   # 每天 UTC 1:17 (北京时间 09:17) 运行，逐站点串行签到
   - cron: '17 1 * * *'
   workflow_dispatch: # 允许手动触发
+  # 临时：签到脚本还在校准，改一次代码就想看一次结果。收敛后删掉这个 push 触发。
+  push:
+    branches: [main]
+    paths:
+    - attendance_checkin.py
+    - tests/**
+    - .github/workflows/attendance.yml
 
 jobs:
   checkin:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 只为了把脱敏日志推到 checkin-evidence 分支（自检回路，见下一步）
 
     steps:
     - uses: actions/checkout@v6
@@ -79,16 +88,45 @@ jobs:
         IS_PROXY: "true"
         TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
         TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-      run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python3 attendance_checkin.py
+      run: |
+        set -o pipefail
+        xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python3 attendance_checkin.py 2>&1 | tee checkin.log
 
-    # attendance_result_<站点>.txt 是关键词校准证据：判定没命中时靠它看站点到底怎么措辞。
-    - name: Upload Evidence
+    # 自检回路：库上没有 API token 可读日志，所以把洗过的日志推到 checkin-evidence 分支，
+    # 改代码那边 git fetch 就能看到这一轮到底走到哪一步。只推白名单行，页面原文不进仓库。
+    - name: Push sanitized run log to checkin-evidence
       if: always()
-      uses: actions/upload-artifact@v6
-      with:
-        name: attendance-evidence
-        path: |
-          attendance_*.png
-          attendance_result_*.txt
-          singbox.log
-        if-no-files-found: ignore
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        [ -f checkin.log ] || : > checkin.log
+        python3 attendance_checkin.py --sanitize-log checkin.log > checkin-evidence.md
+        {
+          echo ""
+          echo "- commit ${GITHUB_SHA:0:7} | run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT | $GITHUB_EVENT_NAME"
+          echo "- 结束(UTC) $(date -u '+%F %T')"
+        } >> checkin-evidence.md
+        echo "----- 即将推上去的证据 -----"
+        cat checkin-evidence.md
+        # token 走 http.extraHeader，不拼进 URL：git 报错时会原样打印 URL
+        HDR="http.extraHeader=AUTHORIZATION: bearer ${GH_TOKEN}"
+        REPO="https://github.com/${GITHUB_REPOSITORY}.git"
+        rm -rf ev && mkdir ev
+        if git ls-remote --heads "$REPO" checkin-evidence | grep -q checkin-evidence; then
+          git -c "$HDR" clone -q --depth 1 -b checkin-evidence "$REPO" ev
+        else
+          git init -q ev && git -C ev remote add origin "$REPO"   # 首轮：分支还不存在
+        fi
+        cd ev
+        cp ../checkin-evidence.md .
+        git -c "$HDR" -c user.name=github-actions -c user.email=actions@github.com \
+            add -f checkin-evidence.md
+        git -c "$HDR" -c user.name=github-actions -c user.email=actions@github.com \
+            commit -q -m "check-in evidence run ${GITHUB_RUN_ID}" --allow-empty
+        git -c "$HDR" push -q --force origin HEAD:checkin-evidence
+        echo "✅ 证据已推到 checkin-evidence:checkin-evidence.md"
+
+    # 不再上传 artifact：库是公开的，artifact 同样公开，而 attendance_result_*.txt /
+    # attendance_*.png 里全是登录后的页面原文（含账号名）。措辞校准靠脚本自己打的
+    # 🔎 结构计数 + 🧾 关键词命中行，两者都只有站点自己的措辞，不含个人信息。

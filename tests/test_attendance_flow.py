@@ -65,17 +65,49 @@ TOKEN = "x" * 60
 FILL = "\n" + "填充" * 120
 
 
+class FakeFrame:
+    """find_elements 回来的假元素，只需要能被 switch_to.frame 认出来。"""
+
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return f"<FakeFrame {self.name}>"
+
+
+class FakeSwitchTo:
+    def __init__(self, sb):
+        self.sb = sb
+
+    def frame(self, el):
+        self.sb.timeline.append(("frame_in", getattr(el, "name", "?")))
+        self.sb.state["in_frame"] = True
+
+    def default_content(self):
+        self.sb.timeline.append(("frame_out", ""))
+        self.sb.state["in_frame"] = False
+
+
 class FakeDriver:
     """真 BaseCase 一定带 .driver（WebDriver），app._cdp 走 driver.execute_cdp_cmd 这条分支。"""
 
     def __init__(self, sb):
         self.sb = sb
+        self.switch_to = FakeSwitchTo(sb)
 
     def execute_cdp_cmd(self, cmd, params):
         return self.sb._cdp(cmd, params)
 
     def execute_script(self, js, *args):
         return self.sb.execute_script(js)
+
+    def find_elements(self, by, value):
+        # 只有「签到入口还在」的那几页上才有 CF 的 iframe
+        card = self.sb._cur()[2]
+        if value.startswith("iframe"):
+            return [FakeFrame(f"iframe{i}") for i in range(2)] if card else []
+        return []
+
 
 
 class FakeSB:
@@ -102,6 +134,13 @@ class FakeSB:
 
     def _cdp(self, cmd, params):
         # 只认代码真会发的命令；冒出别的说明调用点和测试没对上
+        if cmd == "Input.dispatchMouseEvent":
+            self.timeline.append(("mouse", params.get("type"),
+                                  params.get("x"), params.get("y")))
+            if params.get("type") == "mouseReleased" and self.state.get("solve_ok"):
+                # 模拟「点得动」：真事件发出去后 CF 才把 token 填进 input
+                self.state["token"] = self.state.get("issued") or TOKEN
+            return {}
         if cmd != "Network.setCookie":
             raise AssertionError(f"假浏览器没认出的 CDP 命令: {cmd}")
         if not self.state.get("cdp_ok", True):
@@ -109,6 +148,7 @@ class FakeSB:
         self.timeline.append(("set_cookie", params["name"]))
         self.cookies.append((params["name"], params["domain"]))
         return {"success": True}
+
 
     def uc_open_with_reconnect(self, url, reconnect_time=6):
         self.timeline.append(("nav", url.split("?")[0]))
@@ -148,18 +188,25 @@ class FakeSB:
             return None
         # 分发按各脚本的独有串，顺序即特异性顺序（几条脚本都含 innerText / cf-turnstile-response）
         if "/*signals*/" in js: return self._signals()   # _PAGE_SIGNALS_JS
+        if "/*outer*/" in js:                            # _TS_OUTER_JS
+            if not self._cur()[2]:
+                return None
+            return {"idx": 0, "box": {"x": 500, "y": 200, "w": 300, "h": 65}}
+        if "/*inner*/" in js:                            # _TS_INNER_JS
+            if not self.state.get("in_frame"):
+                raise AssertionError("没切进 iframe 就读内层矩形")
+            return {"x": 8, "y": 6, "w": 65, "h": 65}
+        if "/*shadow*/" in js:                           # _TS_SHADOW_CLICK_JS
+            if not self._cur()[2]:
+                return "no-checkbox"
+            if self.state.get("solve_ok"):
+                self.state["token"] = TOKEN
+            return "shadow-clicked"
         if "no-token" in js:                             # _SUBMIT_JS
             self.state["key"] = self.state["after_key"]
             self.state["submitted"] = True
             return self.state["submit_ret"]
-        if "i.value" in js:                              # _read_token
-            if self.state["token"] and self.state.get("auto_submit"):
-                # NexusPHP 的 widget data-callback 拿到 token 就自己提交了（audiences 就这样，
-                # 他实测「过了 cf 会自动跳转到签到成功的页面」）—— 这一步先发生，代码才不会被
-                # 「入口还在」的旧快照卡住。mua 不会自动提交，用 auto_submit=False 关掉。
-                self.state["key"] = self.state["after_key"]
-                self.state["submitted"] = True
-            return self.state["token"]
+        if "i.value" in js: return self.state["token"]     # _read_token
         if "innerText" in js: return self._cur()[1]       # _BODY_TEXT_JS
         raise AssertionError("假浏览器没认出的脚本:\n" + js[:200])
 
@@ -203,11 +250,10 @@ def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
              "after_key": "result", "submit_ret": submit_ret,
              "nav_fails": nav_fails, "cdp_ok": cdp_ok,
              "page_cookie_ok": page_cookie_ok, "submitted": False,
+             # True = 这一下点击真能换来 token（CF 签发）；False = 点了也没用
+             "solve_ok": solve_ok,
              # None = 由当前页的 card 标志推导；给了就覆盖「提交前」那页（构造特殊页面）
              "signals": signals}
-    app_mod._turnstile_token_ok = lambda sb: bool(state["token"])
-    app_mod._turnstile_present = lambda sb: True
-    app_mod.handle_turnstile = lambda sb: solve_ok and bool(state["token"])
     captured = {}
 
     def fake_sb(**kw):
@@ -323,6 +369,25 @@ class _ErrPage:
 
 
 ok(aud._net_error(_ErrPage()) == "ERR_CONNECTION_TIMED_OUT", "A12 日志里带上 Chrome 的 ERR_ 码")
+
+# ===== Turnstile：站点不静默签发时自己点，而且点数必须有上限 =====
+# 上一轮 13 分钟就卡在这：core.handle_turnstile 里的 iframe 定位脚本也是裸 IIFE（恒 None），
+# 定位不到就退化成 uc_gui 盲点 4 轮。现在点击由本模块自己做，最多两次。
+st, detail, sb = run_case(SITE_A, A_PRE, token="",
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+released = [t for t in sb.timeline if t[0] == "mouse" and t[1] == "mouseReleased"]
+ok(st == aud.CHK_PASS and len(released) == 1,
+   f"A14 没静默签发 -> 自己点一次拿到 token 再提交（{len(released)} 次点击，{detail}）")
+ok(released and (released[0][2], released[0][3]) == (540, 238),
+   f"A14b 坐标=外层 iframe(500,200)+内层 widget(8,6,65x65) 的中心 {released and released[0][2:]}")
+
+st, detail, sb = run_case(SITE_A, A_PRE, token="", solve_ok=False)
+released = [t for t in sb.timeline if t[0] == "mouse" and t[1] == "mouseReleased"]
+ok(st == aud.CHK_VERIFY_FAIL and len(released) == 1,
+   f"A14c 点了还没 token -> 最多两次就收手报 VERIFY_FAIL（{len(released)} 次，{detail}）")
+ok(len([t for t in sb.timeline if t[0] == "frame_in"]) >= 1,
+   "A14d 第二次尝试是切进 iframe 穿透 shadow DOM 点 checkbox")
+
 
 # ===== mua（有「立即签到」按钮）=====
 # 这里显式用普通模式 uid+passkey，证明两种登录 cookie 形态都能走完整条链路
