@@ -95,6 +95,10 @@ class FakeSB:
             raise AttributeError("'BaseCase' object has no attribute 'set_cookie'")
         self.cookies.append((cookie_dict["name"], cookie_dict["domain"]))
 
+    def get_cookies(self):
+        # 真库返回 [{"name":.., "value":..}, ...]；值一律用假串
+        return [{"name": n, "value": "fake"} for n, _ in self.cookies]
+
     def get_current_url(self):
         if self.state.get("err_page"):
             return "chrome-error://chromewebdata/"
@@ -171,7 +175,8 @@ st, detail, sb = run_case(SITE_A, A_PRE, attend_key="login")
 ok(st == aud.CHK_NO_SESSION, f"A4 重定向 login.php -> NO_SESSION（{detail}）")
 
 st, detail, sb = run_case(SITE_A, A_PRE, logged_in=False)
-ok(st == aud.CHK_NO_SESSION, f"A5 无 userdetails 链接 -> NO_SESSION（{detail}）")
+ok(st == aud.CHK_NO_SESSION and "罐里有" in detail,
+   f"A5 无 userdetails 链接 -> NO_SESSION，并回报 cookie 罐（{detail}）")
 
 st, detail, sb = run_case(SITE_A, "您今日已经签到，请勿重复打卡" + FILL)
 ok(st == aud.CHK_ALREADY, f"A6 打开即已签到措辞 -> ALREADY（{detail}）")

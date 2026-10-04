@@ -26,7 +26,10 @@ import json
 import re
 import sys
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 # 浏览器/网络依赖只有真去签到或真发通知时才需要；本地 `--cookie-check` 只想验粘贴对不对，
 # 机器上没装 seleniumbase/requests 也得能用。CI 上依赖已装好，永远走不到 except。
@@ -381,6 +384,21 @@ def _dump_evidence(site, body):
         pass
 
 
+def _jar_names(sb):
+    """浏览器 cookie 罐里实际有的名字（只取名字，值不落日志）。"""
+    try:
+        return [c.get("name", "") for c in (sb.get_cookies() or [])]
+    except Exception as e:
+        print(f"  ⚠️ 读不回 cookie 罐: {type(e).__name__}")
+        return []
+
+
+def _login_markers(page):
+    """页面里有没有登录态标志 —— 公开日志只印布尔，绝不印原文（原文含账号名）。"""
+    t = page or ""
+    return ("userdetails" in t or "logout.php" in t, "login.php" in t)
+
+
 def checkin(sb_kwargs, site, pairs):
     """单站点单趟流程。返回 (status, detail)。"""
     try:
@@ -424,7 +442,13 @@ def checkin(sb_kwargs, site, pairs):
             except Exception:
                 logged_in = False
             if not logged_in:
-                return (CHK_NO_SESSION, "注入 cookie 后仍未登录（登录 cookie 无效或已过期）")
+                jar = _jar_names(sb)
+                has_login, has_login_page = _login_markers(text)
+                return (CHK_NO_SESSION,
+                        "注入 cookie 后仍未登录："
+                        f"罐里有 {', '.join(jar) or '空'}；"
+                        f"页面登录态标志={'有' if has_login else '无'}/"
+                        f"{'出现登录页' if has_login_page else '无登录页'}")
             pending = _verify_pending(sb)
             if st in (CHK_PASS, CHK_ALREADY):
                 shot("result")
@@ -473,6 +497,54 @@ def checkin(sb_kwargs, site, pairs):
     except Exception as e:
         print(f"\n❌ 处理异常: {e}")
         return (CHK_UNKNOWN, f"处理异常: {e}")
+
+
+_PROBE_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+             "(KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
+
+
+def probe_site(site):
+    """纯 HTTP（不开浏览器）问一次 attendance.php：这串 cookie 到底认不认。
+
+    用途是把「cookie 已过期」和「站点只认原出口 IP/UA」分开 —— 在同一台机器上分别直连
+    和走代理各跑一次，两条结论就出来了。用 urllib 而非 requests：他本机没装 requests，
+    探针必须开箱能跑。只印状态、最终主机和布尔标志，不印页面原文（原文含账号名）。
+    """
+    pairs = parse_cookie_header(os.environ.get(site.cookie_env, ""))
+    pairs = [(n, v) for n, v in pairs if n.lower() not in _CF_COOKIES]
+    if not pairs:
+        print(f"{site.key}: {site.cookie_env} 里没有可注入的 cookie，跳过")
+        return
+    p = os.environ.get("PROXY_SERVER", "").strip()
+    use_proxy = p and os.environ.get("IS_PROXY", "false").lower() == "true"
+    # 直连时显式清空代理，别被机器上的 HTTP_PROXY 环境变量带跑，结论就不干净了
+    handler = urllib.request.ProxyHandler({"http": p, "https": p} if use_proxy else {})
+    opener = urllib.request.build_opener(handler)
+    req = urllib.request.Request(site.attend, headers={
+        "Cookie": "; ".join(f"{n}={v}" for n, v in pairs), "User-Agent": _PROBE_UA})
+    print(f"{site.key}: 用 {len(pairs)} 项 cookie GET {site.attend}"
+          + (f"（走代理 {p}）" if use_proxy else "（直连）"))
+    status, page, final = "", "", ""
+    try:
+        with opener.open(req, timeout=30) as r:
+            status, final = r.status, r.geturl()
+            page = r.read(400000).decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        status, final = e.code, e.url
+        try:
+            page = e.read(400000).decode("utf-8", "replace")
+        except Exception:
+            pass
+    except Exception as e:
+        # 异常文本只会带 URL，不会带请求头
+        print(f"  请求失败 {type(e).__name__}: {str(e)[:120]}")
+        return
+    logged, login_page = _login_markers(page)
+    print(f"  HTTP {status}｜最终主机 {urlparse(final).netloc or final}｜"
+          f"登录态={'有' if logged else '无'}｜被指向登录页={'是' if login_page else '否'}")
+    if not logged:
+        print("  → 这个出口拿这串 cookie 登不上（过期 / 换了出口被拒 / UA 绑定）。"
+              "在能正常登录的浏览器里重新复制一份再试。")
 
 
 def run_site(sb_kwargs, site):
@@ -549,6 +621,13 @@ def main():
             verdict = "✅ 可用于签到" if session_ok(pairs, site) else "❌ 判为无登录态"
             print(f"{site.key}: {verdict}（需要 {session_hint(site)}；"
                   f"解析出 {len(pairs)} 项：{', '.join(n for n, _ in pairs) or '无'}）")
+        raise SystemExit(0)
+
+    if "--cookie-probe" in sys.argv:
+        # 纯 HTTP 探针：这串 cookie 在「当前这台机器的出口」认不认，不开浏览器、不打码值
+        for site in sites:
+            probe_site(site)
+            print()
         raise SystemExit(0)
 
     IS_PROXY = os.environ.get("IS_PROXY", "false").lower() == "true"

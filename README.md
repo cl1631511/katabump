@@ -78,9 +78,13 @@
    ```powershell
    $env:AUDIENCES_COOKIE="c_secure_uid=...; c_secure_pass=..."
    $env:MUA_COOKIE="c_secure_pass=..."
-   python attendance_checkin.py --cookie-check
-   python attendance_checkin.py
+   python attendance_checkin.py --cookie-check   # 解析与字段名对不对
+   python attendance_checkin.py --cookie-probe   # 纯 HTTP 问一次：这串 cookie 在这个出口认不认
+   python attendance_checkin.py                  # 开浏览器真签到
    ```
+   `--cookie-probe` 用来分清「cookie 过期」和「站点绑定出口 IP/UA」：在能正常登录的机器上
+   直连跑一次，再 `$env:IS_PROXY="true"; $env:PROXY_SERVER="http://127.0.0.1:8080"` 走代理跑一次，
+   两边结果一对就知道是哪一种。只打印状态码、最终主机和布尔标志，不打印页面原文。
 7. **回归测试**（不需要浏览器/网络）：
    ```powershell
    python tests/test_attendance_classify.py
