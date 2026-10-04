@@ -116,13 +116,28 @@ def send_tg_message(status_icon, status_text, time_left=""):
 
 
 def mask_email(email):
-    """ab****cd@domain：库是公开的、推送正文还要经过 api.day.app，账户只留这个形状。"""
-    if "@" in email:
-        name, domain = email.split("@", 1)
-        if len(name) > 4:
-            return f"{name[:2]}****{name[-2:]}@{domain}"
-        return f"{name}@{domain}"
-    return (email[:2] + "****") if email else "未知"
+    """只留本地名的两头（ab****cd），**域名一律不带**。
+
+    两个地方都要它这个形状：推送正文会原样发给 api.day.app（第三方），而顶层 stdout 过滤器
+    本来就把域名遮成 ***.*** —— 带着域名既和过滤器打架（尾巴+@domain 会被它当成一个完整邮箱
+    吃掉、洗成 ab*******@***.***），也把不想露的东西交给了第三方。
+    """
+    name = (email or "").split("@", 1)[0]
+    if len(name) > 4:
+        return f"{name[:2]}****{name[-2:]}"
+    return (name[:2] + "****") if name else "未知"
+
+
+def wash(text):
+    """推送正文专用的一道洗：顶层那个 stdout 过滤器只保护日志，保护不到发给 api.day.app 的正文，
+    而告警详情是从页面上抠下来的自由文本，可能夹带邮箱/域名/IP/键值对。规则跟过滤器完全共用。"""
+    s = str(text or "")
+    s = _SanitizeFilter.IP_RE.sub("***.***.***.***", s)
+    s = _SanitizeFilter.MAIL_RE.sub("***@***.***", s)
+    s = _SanitizeFilter.DOM_RE.sub("***.***", s)
+    s = _SanitizeFilter.KV_RE.sub(lambda m: m.group(1) + "=***", s)
+    s = _SanitizeFilter.JSON_RE.sub(lambda m: '"%s":"***"' % m.group(1), s)
+    return s
 
 
 # ============================================================
@@ -169,9 +184,9 @@ def push_notice(status_icon, status_text, detail="", critical=False, account=Non
         ts = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 8 * 3600))
         acct = CURRENT_EMAIL if account is None else account
         body = "\n".join(x for x in ((f"👤 {mask_email(acct)}" if acct else ""),
-                                     detail, f"⏱️ {ts}") if x)
-        return send_bark(f"{status_icon} {status_text}", body, critical)
-    send_tg_message(status_icon, status_text, detail)
+                                     wash(detail), f"⏱️ {ts}") if x)
+        return send_bark(wash(f"{status_icon} {status_text}"), body, critical)
+    send_tg_message(status_icon, status_text, wash(detail))
     return bool(TG_BOT_TOKEN and TG_CHAT_ID)
 
 
@@ -1751,7 +1766,7 @@ def _save_state(email, expiry_iso):
         d[email] = expiry_iso
         with open(STATE_FILE, "w") as f:
             json.dump(d, f)
-        print(f"💾 已记录 {email} 新到期日: {expiry_iso}")
+        print(f"💾 已记录 {mask_email(email)} 新到期日: {expiry_iso}")
     except Exception as e:
         print(f"⚠️ 状态写入失败（不影响续期）: {e}")
 
@@ -2069,10 +2084,10 @@ def _run_account(sb_kwargs, email, pwd):
             st = res.get("status", RENEW_UNKNOWN) if isinstance(res, dict) else RENEW_UNKNOWN
             detail = res.get("detail", "") if isinstance(res, dict) else ""
             rdays = res.get("remaining_days") if isinstance(res, dict) else None
-            print(f"ℹ️  账号 {email} 续期状态: {st}")
+            print(f"ℹ️  账号 {mask_email(email)} 续期状态: {st}")
             return (st, detail, rdays)
     except Exception as e:
-        print(f"\n❌ 账号 {email} 处理异常: {e}")
+        print(f"\n❌ 账号 {mask_email(email)} 处理异常: {e}")
         return (RENEW_UNKNOWN, f"处理异常: {e}", None)
 
 #  脚本执行入口 (可选代理)
@@ -2164,7 +2179,7 @@ def main():
         email = acc["email"]
         pwd   = acc["password"]
         print("\n" + "=" * 25)
-        print(f"  处理账号 {idx}/{len(ACCOUNTS)}: {email}")
+        print(f"  处理账号 {idx}/{len(ACCOUNTS)}: {mask_email(email)}")
         print("=" * 25)
 
         acc_res = RENEW_UNKNOWN
@@ -2180,7 +2195,7 @@ def main():
             acc_res = RENEW_COOLDOWN
             acc_rdays = skipdays
             acc_detail = f"冷却期跳过（上次 expiry 距今约 {skipdays} 天，未到续期窗口）"
-            print(f"⏳ [根因] 账号 {email} 冷却期跳过：距上次 expiry 约 {skipdays} 天 > {MAX_CONFIRMED_ALERT_DAYS}，不点 Renew。")
+            print(f"⏳ [根因] 账号 {mask_email(email)} 冷却期跳过：距上次 expiry 约 {skipdays} 天 > {MAX_CONFIRMED_ALERT_DAYS}，不点 Renew。")
         else:
             for attempt in range(1, max_attempts + 1):
                 print(f"  ── 节点尝试 {attempt}/{max_attempts} ──")
@@ -2213,13 +2228,13 @@ def main():
         icon, atext, should_alert = _alert_action(acc_res, acc_rdays)
         if acc_res == RENEW_PASS:
             renewed += 1
-            print(f"✅ 账号 {email} 续期成功")
+            print(f"✅ 账号 {mask_email(email)} 续期成功")
             summary_lines.append(f"✅ {mask_email(email)} {atext}")
         elif should_alert:
             # 真·问题：suspended / 流程未跑通 / 临近到期未确认续上 → 红告警 + Actions 失败
             failed += 1
             extra = f"（剩 {acc_rdays} 天）" if acc_res == RENEW_UNCONFIRMED and acc_rdays is not None else ""
-            print(f"❌ 账号 {email} {atext}{extra}（{acc_res}）：{acc_detail or ''}")
+            print(f"❌ 账号 {mask_email(email)} {atext}{extra}（{acc_res}）：{acc_detail or ''}")
             # 立刻发，不等汇总：这一轮后面还可能崩/挂，真问题不能跟着一起丢
             push_notice(icon, atext, f"{mask_email(email)} {acc_res} | {acc_detail}", critical=True)
             summary_lines.append(f"❌ {mask_email(email)} {atext}{extra}")
@@ -2228,7 +2243,7 @@ def main():
             # 且真死由 suspended 硬告警兜底 → 不单独告警，但进每轮汇总。
             cooldown += 1
             extra = f"剩 {acc_rdays} 天" if acc_rdays is not None else "天数未知"
-            print(f"⏳ 账号 {email} 本次未触发告警（{acc_res}，{extra}）：{acc_detail or ''}")
+            print(f"⏳ 账号 {mask_email(email)} 本次未触发告警（{acc_res}，{extra}）：{acc_detail or ''}")
             summary_lines.append(f"⏳ {mask_email(email)} "
                                  f"{_QUIET_TEXT.get(acc_res, acc_res)}（{extra}）")
 

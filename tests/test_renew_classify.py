@@ -302,5 +302,28 @@ finally:
     for k in ("PIN_NODE", "POOL_FILE", "PROXY_URL", "PROXY_CHAIN_URL"):
         _os.environ.pop(k, None)
 
+# ---- 日志里的账号身份（库是公开的，续期日志也是公开的）----
+import re as _re
+_src = (ROOT / "app.py").read_text(encoding="utf-8")
+_raw = [l.strip() for l in _src.splitlines() if _re.search(r'print\(f"[^"]*\{email\}', l)]
+ok(not _raw, "续期日志不再直接打印邮箱原文（以后漏网的写法会被这条钉住）：" + str(_raw))
+# mask_email 的新形状（只留本地名两头）必须能活着走过 app 顶层的 stdout 过滤器：
+# 旧形状 so****27@example.com 会被 MAIL_RE 从 "27@example.com" 咬住 -> 日志里成了
+# so*******@***.***，掩码等于白做，域名也照样发给 api.day.app。
+_masked = app.mask_email("some_user_9527@example.com")
+ok(_masked == "so****27", "掩码形状 = so****27（无 @、无域名）")
+ok(app._SanitizeFilter.MAIL_RE.sub("***@***.***", _masked) == _masked,
+   "掩码形状不会被过滤器二次改写")
+ok(all(s not in app.wash("失败于 some_user_9527@example.com / 203.0.113.7 / panel.internal:8443/?password=hunter2")
+       for s in ("some_user_9527", "example.com", "203.0.113.7", "hunter2")),
+   "wash() 把发给第三方的正文里的地址/IP/密码全洗掉")
+# wash() 的五条规则必须和日志过滤器完全一致 —— 否则「日志里看不到」不等于「推送里也看不到」。
+from io import StringIO as _SI
+_through = _SI()
+_dirty = '登录 some_user_9527@example.com 于 203.0.113.7，参数 password=hunter2 且 "token":"abc"'
+app._SanitizeFilter(_through).write(_dirty)
+ok(_through.getvalue() == app.wash(_dirty),
+   "wash() 与 stdout 过滤器对同一段文本产出完全相同的结果（共用那五条正则，不是另起一份）")
+
 print("\n✅ PIN_NODE / PROXY_CHAIN_URL 通过 (8 项)")
-print("\n✅✅ 全部测试通过 (15 + 10 + 6 + 12 + 9 + 8 + 15 + 8 = 83/83)")
+print("\n✅✅ 全部测试通过 (15 + 10 + 6 + 12 + 9 + 8 + 15 + 8 + 5 = 88/88)")

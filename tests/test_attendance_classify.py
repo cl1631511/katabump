@@ -211,17 +211,25 @@ ok(p["volume"] == "0" and p["sound"] == "minuet",
 ok(app_mod.send_bark("t", "b") and GETS[-1][1]["level"] == "active", "B4 平时是 active 级")
 ok("volume" not in GETS[-1][1], "B4b 普通通知不带 volume（用系统默认音量）")
 
-# 账户身份：推送正文要经过 api.day.app，所以只允许掩码形状出现
+# 账户身份：推送正文要经过 api.day.app（第三方），所以连域名都不许出现
 GETS.clear(), POSTS.clear()
 app_mod.CURRENT_EMAIL = "some_user_9527@example.com"
 aud.TG_BOT_TOKEN, aud.TG_CHAT_ID = "fakeBot", "fakeChat"
 ok(app_mod.push_notice("✅", "续期成功", "续期成功"), "B5 配了 BARK_KEY 就发 Bark")
 ok(len(GETS) == 1 and not POSTS, "B6 有 Bark 就不再叠加 Telegram（同一件事只打扰一次）")
 sent = urllib.parse.unquote(GETS[0][0])
-ok("some_user_9527@example.com" not in sent, "B7 推送里绝不含完整邮箱")
-ok("so****27@example.com" in sent, "B8 只有掩码形状（前二后二）")
-ok(app_mod.mask_email("ab@x.com") == "ab@x.com" and app_mod.mask_email("") == "未知",
-   "B9 短本地名不硬掩、空值不崩")
+ok("some_user_9527" not in sent and "example.com" not in sent,
+   "B7 推送 URL 里没有账号本地名、也没有域名（以前只卡整串邮箱，域名就这么发给了第三方）")
+ok("so****27" in sent, "B8 只留本地名两头（cl****11 形状）")
+ok(app_mod.mask_email("ab@x.com") == "ab****" and app_mod.mask_email("") == "未知",
+   "B9 短本地名不硬掩、空值不崩，且一律不带域名")
+# mask_email 的输出还得能活着走过 app.py 顶层那个 stdout 过滤器：
+# 带 @ 的掩码串（so****27@example.com）会被 MAIL_RE 从 "27@example.com" 咬掉，
+# 日志里就成了 so*******@***.*** —— 掩码白做了。不带 @ 就原样通过。
+_F = app_mod._SanitizeFilter
+_washed = _F.MAIL_RE.sub("***@***.***", app_mod.mask_email("some_user_9527@example.com"))
+ok(_washed == "so****27", "B9b 掩码形状不会被日志过滤器二次改写（带 @ 的那版会被洗成 cl*******@***.***）")
+ok("@" not in _washed, "B9c 过滤器洗过的形状里仍然没有 @")
 
 GETS.clear(), POSTS.clear()
 app_mod.BARK_KEY = ""
@@ -268,13 +276,14 @@ ok(len(GETS) == 1, "B18 全员已签到那一轮照样推一条（收到=今天�
 GETS.clear()
 app_mod.CURRENT_EMAIL = "some_user_9527@example.com"
 app_mod.push_notice("✅", "本轮跑完：1 个都在冷却期，无需续期",
-                    "⏳ so****27@example.com 冷却期内无需续（剩 12 天）", account="")
+                    "⏳ so****27 冷却期内无需续（剩 12 天）", account="")
 sent = urllib.parse.unquote(GETS[0][0])
 ok("👤" not in sent, "B19 account=\"\" 的汇总消息不带头部账号行（CURRENT_EMAIL 是最后一个账号，挂上去就是误导）")
-ok("some_user_9527@example.com" not in sent, "B20 汇总正文同样只有掩码形状")
+ok("some_user_9527" not in sent and "@" not in sent and "example.com" not in sent,
+   "B20 汇总正文同样只有掩码形状，且一个 @ 都没有")
 GETS.clear()
 app_mod.push_notice("✅", "续期成功", "到期 2026-11-04")
-ok("👤 so****27@example.com" in urllib.parse.unquote(GETS[0][0]),
+ok("👤 so****27" in urllib.parse.unquote(GETS[0][0]),
    "B21 不传 account 时仍按当前账号出头（单账号消息没变样）")
 # 汇总行是拿 _alert_action 的 text 拼的，而它对「不单独告警」那两种状态返回空串 ——
 # 空串进汇总就成了「⏳ ab****cd@x.com （剩 12 天）」这种读不出来的话，所以必须有兜底文案
@@ -283,5 +292,20 @@ ok(_Quiet <= set(app_mod._QUIET_TEXT), "B22 静默状态在汇总里都有人话
 for _st in (app_mod.RENEW_COOLDOWN, app_mod.RENEW_UNCONFIRMED):
     ok(app_mod._alert_action(_st, 12)[1] == "" and app_mod._QUIET_TEXT[_st],
        f"B23 {_st} 不单独告警但汇总有词：{app_mod._QUIET_TEXT[_st]}")
+
+# ── 11. wash()：告警详情是页面上抠下来的自由文本，发给第三方前必须过一道 ──────
+# 顶层的 stdout 过滤器只洗日志，洗不到 HTTP 正文 —— 这条以前是漏的。
+DIRTY = ('登录失败 some_user_9527@example.com 于 203.0.113.7，'
+         '面板 https://console.invalid:8443/?password=hunter2 提示 "token":"abc"')
+w = app_mod.wash(DIRTY)
+ok(all(s not in w for s in ("some_user_9527", "example.com", "203.0.113.7", "hunter2", '"abc"')),
+   "B24 邮箱/IP/键值对/JSON 值全被洗掉：%s" % w)
+ok("登录失败" in w and "提示" in w, "B25 洗的只是凭证形状，读得出是什么原因失败的")
+GETS.clear()
+app_mod.BARK_KEY = "fakeDeviceKey"
+app_mod.push_notice("❌", "续期流程未跑通，需查看", DIRTY, critical=True, account="")
+raw = urllib.parse.unquote(GETS[0][0])
+ok("hunter2" not in raw and "some_user_9527" not in raw and "16315" not in raw,
+   "B26 脏详情经过 push_notice 出口时确实被洗过才发出去")
 
 print("\nALL OK")
