@@ -4,3 +4,7 @@ config.json
 # python
 __pycache__/
 *.pyc
+
+# 签到运行时证据
+attendance_result_*.txt
+attendance_*.png

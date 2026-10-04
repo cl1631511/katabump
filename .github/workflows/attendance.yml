@@ -1,0 +1,94 @@
+name: PT Attendance Check-in
+
+on:
+  schedule:
+  # 每天 UTC 1:17 (北京时间 09:17) 运行，逐站点串行签到
+  - cron: '17 1 * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.12'
+
+    - name: Install System & Python Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb x11-utils xdotool scrot fonts-noto-cjk
+        pip install seleniumbase requests
+        seleniumbase install chromedriver
+
+    # 与 renew.yml 同一份 PROXY_URL / PROXY_CHAIN_URL secret，同一个 127.0.0.1:8080 出口池。
+    - name: Start Proxy (sing-box)
+      env:
+        PROXY_URL: ${{ secrets.PROXY_URL }}
+        PROXY_CHAIN_URL: ${{ secrets.PROXY_CHAIN_URL }}
+      run: |
+        if [ -z "$PROXY_URL" ]; then
+          echo "PROXY_URL not set, skipping sing-box setup."
+          exit 0
+        fi
+        SINGBOX_VER="1.13.16"
+        echo "Downloading sing-box v${SINGBOX_VER}..."
+        wget -q "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VER}/sing-box-${SINGBOX_VER}-linux-amd64.tar.gz"
+        tar -xzf "sing-box-${SINGBOX_VER}-linux-amd64.tar.gz"
+        mv "sing-box-${SINGBOX_VER}-linux-amd64/sing-box" ./sing-box
+        chmod +x ./sing-box
+        echo "Generating sing-box config from PROXY_URL..."
+        python proxy_handler.py
+        echo "Starting sing-box..."
+        nohup ./sing-box run -c config.json > singbox.log 2>&1 &
+        sleep 3
+        echo "--- singbox.log ---"
+        cat singbox.log || true
+        echo "--- health check ---"
+        if ! pgrep -f "./sing-box" > /dev/null; then
+          echo "❌ sing-box process not running"
+          exit 1
+        fi
+        echo "✅ sing-box process alive"
+        (command -v ss >/dev/null && ss -tlnp 2>/dev/null | grep 8080) || echo "(ss unavailable)"
+        echo "--- proxy connectivity test ---"
+        if curl -sS -m 20 -x http://127.0.0.1:8080 https://ipv4.icanhazip.com; then
+          echo ""
+          echo "  <- proxy OK"
+          grep -iE "urltest|selected|node-|ERROR" singbox.log | tail -8 || true
+        else
+          echo ""
+          echo "❌ proxy connect FAILED — dialer/chain unreachable from this runner"
+          cat singbox.log || true
+          exit 1
+        fi
+
+    # 站点表在 attendance_checkin.py 的 SITES 里；每站一个 Cookie secret，缺哪个就只有那个站报红。
+    # 只想跑其中一站时加 CHECKIN_SITES: "audiences" 或 "mua"。
+    - name: Run Check-in Script
+      env:
+        AUDIENCES_COOKIE: ${{ secrets.AUDIENCES_COOKIE }}
+        MUA_COOKIE: ${{ secrets.MUA_COOKIE }}
+        PROXY_URL: ${{ secrets.PROXY_URL }}
+        PROXY_CHAIN_URL: ${{ secrets.PROXY_CHAIN_URL }}
+        PROXY_SERVER: http://127.0.0.1:8080
+        IS_PROXY: "true"
+        TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+        TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+      run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" python3 attendance_checkin.py
+
+    # attendance_result_<站点>.txt 是关键词校准证据：判定没命中时靠它看站点到底怎么措辞。
+    - name: Upload Evidence
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: attendance-evidence
+        path: |
+          attendance_*.png
+          attendance_result_*.txt
+          singbox.log
+        if-no-files-found: ignore

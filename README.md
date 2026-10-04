@@ -47,6 +47,52 @@
 
 ---
 
+## 🎫 PT 每日签到 (`attendance_checkin.py`)
+
+已接入站点：**audiences.me**、**mua.xloli.cc**（都在 `attendance.php`）。两站机制同构 ——
+「登录态 cookie + Cloudflare Turnstile」，签到就是把 token 交回表单，没有别的动作。
+本仓库已有 Turnstile 绕过和 sing-box 出口池，签到直接复用，`app.py` 未改动。
+
+1. **取 Cookie**（一次即可，失效再换）：浏览器登录该站 → F12 → **Network** → 刷新
+   `attendance.php` → 点该请求 → **Request Headers** 里的整条 `Cookie` 值复制出来。
+2. **加 Secret**：Settings → Secrets and variables → Actions，一站一个：
+   - `AUDIENCES_COOKIE`（必须同时含 `uid=` 和 `passkey=`）
+   - `MUA_COOKIE`（含 `passkey=`/`uid=`/`uuid=` 任一即可）
+   ```
+   uid=12345; passkey=abcdef...; cf_clearance=...; PHPSESSID=...
+   ```
+   `cf_clearance` 可不带 —— 它是 IP/UA 绑定的，CI 出口和浏览器不一样，过期了浏览器会自己重新过 CF。
+   缺哪个站 secret 就只有那个站报红，另一站照签。
+3. **Workflow**：`.github/workflows/attendance.yml`，每天北京时间 09:17 逐站串行跑，
+   与续期共用 `PROXY_URL` / `PROXY_CHAIN_URL` / `TG_BOT_TOKEN` / `TG_CHAT_ID`。
+   手动触发：Actions → PT Attendance Check-in → Run workflow；只想跑一站就在 step env 加
+   `CHECKIN_SITES: "mua"`。
+4. **判定规则**：签到成功 ✅ 通知；今日已签 ⏳ 静默；cookie 失效 / 人机验证没过 / 流程没跑通
+   → ❌ 告警 + CI 红灯。TG 一条消息汇总所有站点。结果页措辞未知时会把页面文本存成 artifact
+   `attendance-evidence`（`attendance_result_<站点>.txt` + `attendance_<站点>_*.png`），据此再收紧关键词。
+5. **加新站点**：在 `attendance_checkin.py` 的 `SITES` 表里加一条（key/域名/cookie 环境变量名/
+   必需的登录 cookie 字段），再配同名 secret。表单结构两种都认：有提交按钮就点按钮
+   （mua），没按钮靠 widget 回调自动提交（audiences）。
+6. **本地调试**（PowerShell）：
+   ```powershell
+   $env:AUDIENCES_COOKIE="uid=...; passkey=..."
+   $env:MUA_COOKIE="passkey=...; uid=..."
+   python attendance_checkin.py
+   ```
+7. **回归测试**（不需要浏览器/网络）：
+   ```powershell
+   python tests/test_attendance_classify.py
+   python tests/test_attendance_flow.py
+   ```
+
+> 仓库是公开的：新加站点快照后**必须先洗掉个人信息**再提交——
+> `python tests/scrub_fixture.py tests/fixtures/<新快照>.html`
+> 它会把账号名、userdetails id/uuid、邀请 id、流量/积分/排名等替换成占位值，并校验签到判定依赖的结构标记没被洗坏。
+
+> 启用后建议把 PT-Checkin 里对应的 `audiences` / `mua` 站点关掉，避免两边同一天重复抢签到。
+
+---
+
 ## 💻 Windows 本地运行指南
 
 如果你想在本地观察运行过程或进行调试，请按以下步骤操作。
@@ -130,5 +176,9 @@ node renew.js
 * `renew.js`: Windows 本地运行的主程序。
 * `action_renew.js`: 专门用于 GitHub Actions 环境的脚本（适配 Linux/Headless），支持随机延迟和 sing-box 代理。
 * `proxy_handler.py`: 代理协议解析器，将 vmess/vless/hy2/tuic/socks5 等协议转换为 sing-box 配置。
+* `attendance_checkin.py`: PT 每日签到（audiences.me / mua.xloli.cc，复用 app.py 的 Turnstile 绕过与代理池）。
+* `.github/workflows/attendance.yml`: 签到的定时任务。
+* `tests/fixtures/*_attendance_pre_submit.html`: 各站未签到态页面快照，防假绿的回归测试素材。
+* `tests/scrub_fixture.py`: 把新快照里的账号标识洗成占位值（公开仓库提交前必跑）。
 * `.github/workflows/renew.yml`: GitHub Actions 的定时任务配置文件。
 * `login.json`: (需手动创建) 存放本地运行的账号信息。

@@ -1,0 +1,1115 @@
+    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+    <html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta name="referrer" content="same-origin" />
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <meta name="viewport" content="width=1669, viewport-fit=cover"/>
+                <meta name="generator" content="NexusPHP"/>
+                <title>Audiences :: 签到 - Powered by NexusPHP</title>
+        <link rel="shortcut icon" href="favicon.ico" type="image/x-icon"/>
+        <link rel="stylesheet" href="styles/custom.css?t=1782799075" type="text/css">
+        <link rel="stylesheet" href="styles/mediumfont.css?t=1777046400" type="text/css"/>
+        <link rel="stylesheet" href="styles/sprites.css?t=1777046400" type="text/css"/>
+        <link rel="stylesheet" href="pic/forum_pic/chs/forumsprites.css?t=1777046400" type="text/css"/>
+        <link rel="stylesheet" href="styles/BlasphemyOrange/theme.css?t=1777046400" type="text/css"/>
+        <link rel="stylesheet" href="styles/BlasphemyOrange/DomTT.css?t=1777046400" type="text/css"/>
+        <link rel="stylesheet" href="styles/curtain_imageresizer.css?t=1777046400" type="text/css"/>
+        <link rel="stylesheet" href="styles/ddlevelsmenu-base.css?t=1777046400" type="text/css"/>
+        <link rel="stylesheet" href="styles/dragon.css?t=1777046400" type="text/css"/>
+        <link rel="stylesheet" href="styles/FA/css/all.min.css?t=1777046400" type="text/css"/>
+        <link rel="stylesheet" href="template/css/torrents.css?t=1778709518" type="text/css"/>
+        <link rel="stylesheet" href="template/css/index.css?t=1782799075" type="text/css"/>
+        <link rel="stylesheet" href="template/css/forums.css?t=1782799075" type="text/css"/>
+        <link rel="stylesheet" href="styles/tags.css?t=1777109808" type="text/css"/>
+<!--        <link rel="stylesheet" href="styles/snowflakes.css--><!--" type="text/css"/>-->
+        <style type="text/css">
+            :root {
+                --site-shell-max-width: 1960px;
+                --site-shell-side-gap: 16px;
+                --site-content-inline-gap: 26px;
+            }
+
+            table.mainouter,
+            .site-mainouter.site-mainouter--with-banner,
+            .site-head.site-head--with-banner {
+                width: min(calc(100% - (var(--site-shell-side-gap) * 2)), var(--site-shell-max-width)) !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+            }
+
+            .torrents-table,
+            #outer > table.main,
+            #outer > form > table.main,
+            #outer > div > table.main,
+            #outer > table.mainouter {
+                width: calc(100% - (var(--site-content-inline-gap) * 2)) !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+            }
+
+            #outer > table.mainouter > tbody > tr > td.outer > table.main {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+            }
+
+            /*
+             * 让其他页面的内部左右边距与种子列表页一致：
+             * 种子列表页 (torrents.php) 中的 .torrents-table 自带 26px 的左右内缩，
+             * 这里给所有不包含 .torrents-table 的 td.embedded 增加同样的 26px
+             * 左右 padding，使非种子列表页的内容也从相同位置开始。
+             */
+            #outer > table.main > tbody > tr > td.embedded:not(:has(.torrents-table)),
+            #outer > form > table.main > tbody > tr > td.embedded:not(:has(.torrents-table)),
+            #outer > div > table.main > tbody > tr > td.embedded:not(:has(.torrents-table)),
+            #outer > table.mainouter > tbody > tr > td.outer > table.main > tbody > tr > td.embedded:not(:has(.torrents-table)) {
+                padding-left: var(--site-content-inline-gap) !important;
+                padding-right: var(--site-content-inline-gap) !important;
+            }
+
+            @media (max-width: 1320px) {
+                table.mainouter,
+                .site-mainouter.site-mainouter--with-banner,
+                .site-head.site-head--with-banner {
+                    width: min(calc(100% - (var(--site-shell-side-gap) * 2)), var(--site-shell-max-width)) !important;
+                }
+            }
+
+            @media (hover: none) and (pointer: coarse) {
+                body {
+                    --site-shell-max-width: 1960px !important;
+                }
+            }
+
+            img {
+                max-width: 1000px;
+            }
+
+            body {
+                overflow-y: scroll;
+            }
+        </style>
+                        <link rel="stylesheet" href="pic/category/chd/scenetorrents/catsprites.css?t=1777046400"
+                      type="text/css"/>
+                        <link rel="alternate" type="application/rss+xml" title="Latest Torrents" href="torrentrss.php"/>
+        <script type="text/javascript" src="js/jquery-1.11.3.min.js"></script>
+        <script type="text/javascript" src="js/polyfill.js?t=1777046400"></script>
+        <script type="text/javascript" src="curtain_imageresizer.js?t=1780486885"></script>
+        <script type="text/javascript" src="ajaxbasic.js?t=1777046400"></script>
+        <script type="text/javascript" src="domLib.js?t=1777046400"></script>
+        <script type="text/javascript" src="domTT.js?t=1777046400"></script>
+        <script type="text/javascript" src="domTT_drag.js?t=1777046400"></script>
+        <script type="text/javascript" src="fadomatic.js?t=1777046400"></script>
+        <script type="text/javascript" src="js/ddlevelsmenu.js?t=1782799075"></script>
+        <script type="text/javascript" src="js/layer/layer.js?t=1777046400"></script>
+        <script type="text/javascript" src="common.js?t=1781442552"></script>
+
+        <script type="text/javascript" src="js/swiper-bundle.min.js"></script>
+        <link rel="stylesheet" href="styles/swiper-bundle.min.css"/>
+        <style>
+            .site-hero-banner__swiper.swiper {
+                width: 100%;
+                max-width: none;
+                height: var(--site-hero-banner-height);
+            }
+
+            .site-hero-banner__swiper .swiper-slide {
+                background: #140f0d;
+            }
+
+            .site-hero-banner__swiper .swiper-slide img {
+                display: block;
+                max-width: 100%;
+                width: auto;
+                height: 100%;
+                object-fit: contain;
+            }
+            .swiper-pagination-bullet {
+                width: 20px;
+                height: 20px;
+                text-align: center;
+                line-height: 20px;
+                font-size: 12px;
+                color: #000;
+                opacity: 1;
+                background: rgba(0, 0, 0, 0.2);
+            }
+
+            .swiper-pagination-bullet-active {
+                color: #fff;
+                background: #ff9718;
+            }
+
+            body {
+                --swiper-theme-color: #000000;
+            }
+        </style>
+                <script>window.__heroBannerServerVisible = true;</script>
+        <script>
+            /*
+             * 顶部横幅尺寸早注入：避免页面加载时闪烁。
+             *
+             * "显示 / 隐藏" 的偏好现在走后端 (users.user_prefs JSON: site.hero_banner.visible)
+             * 统一由 PHP 决定初始值 —— 登录用户跨设备一致；未登录 / 无偏好时默认显示。
+             * "高度"依然走前端 localStorage (audiesHeroBanner.height) —— 调节是高频拖拽
+             * 操作，没必要写回服务端，且只是视觉偏好，换设备回到默认 300px 也可接受。
+             */
+            (function () {
+                try {
+                    var DEFAULTS = { visible: true, height: 300 };
+                    // visible 由 PHP 服务端注入（见下方 window.__heroBannerServerVisible）
+                    var serverVisible = window.__heroBannerServerVisible;
+                    if (typeof serverVisible !== 'boolean') serverVisible = DEFAULTS.visible;
+
+                    var raw = localStorage.getItem('audiesHeroBanner');
+                    var localState = {};
+                    try { localState = raw ? JSON.parse(raw) : {}; } catch (e2) { localState = {}; }
+
+                    var s = {
+                        visible: serverVisible,
+                        height: (parseInt(localState && localState.height, 10) || DEFAULTS.height)
+                    };
+
+                    if (!s.visible) {
+                        document.documentElement.classList.add('hero-banner-hidden');
+                    }
+                    var css = '.site-hero-banner{'
+                        + '--site-hero-banner-height:' + s.height + 'px;'
+                        + '}';
+                    var style = document.createElement('style');
+                    style.id = 'hero-banner-init-style';
+                    style.appendChild(document.createTextNode(css));
+                    document.head.appendChild(style);
+                    window.__heroBannerState = s;
+                } catch (e) { /* ignore */ }
+            })();
+        </script>
+    </head>
+        <body class="page-attendance site-font-medium site-nav-align-center site-tag-style-watercolor">
+<!--    <div class="snowflakes">-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--        <div class="snow"></div> <div class="snow"></div>-->
+<!--    </div>-->
+        <nav id="roll_actions" class="site-float-nav" aria-label="Quick navigation" style="display:none;">
+        <a href="javascript:void(0)" id="roll_prev"
+           class="site-float-nav__button site-float-nav__button--pager is-hidden is-disabled"
+           title="上一页" aria-disabled="true" draggable="false">
+            <span class="site-float-nav__icon" aria-hidden="true">&#8249;</span>
+            <span class="site-float-nav__text">上一页</span>
+        </a>
+        <a href="javascript:void(0)" id="roll_next"
+           class="site-float-nav__button site-float-nav__button--pager is-hidden is-disabled"
+           title="下一页" aria-disabled="true" draggable="false">
+            <span class="site-float-nav__icon" aria-hidden="true">&#8250;</span>
+            <span class="site-float-nav__text">下一页</span>
+        </a>
+        <a href="javascript:void(0)" id="roll_top"
+           class="site-float-nav__button site-float-nav__button--top"
+           title="返回顶部" draggable="false">
+            <span class="site-float-nav__icon" aria-hidden="true">&#8593;</span>
+            <span class="site-float-nav__text">返回顶部</span>
+        </a>
+    </nav>
+            <div class="site-head site-head--with-banner">
+            <div class="site-hero-banner-cell">
+                    <div class="site-hero-banner">
+                        <div class="hero-settings" id="hero-settings">
+                            <button type="button" class="hero-settings__btn" id="hero-settings-btn"
+                                    title="顶部横幅设置" aria-label="顶部横幅设置" aria-expanded="false">
+                                <i class="fas fa-cog" aria-hidden="true"></i>
+                            </button>
+                            <div class="hero-settings__panel" id="hero-settings-panel" hidden>
+                                <div class="hero-settings__row" style="color: rgba(255, 247, 241, 0.6); font-size: 12px; line-height: 1.6;">
+                                    <div>· 鼠标移到横幅<strong style="color: rgba(255, 247, 241, 0.85);">四角</strong>，可拖动调整高度</div>
+                                    <div>· 横向<strong style="color: rgba(255, 247, 241, 0.85);">拖动图片</strong>可手动切换</div>
+                                    <div>· 隐藏横幅请到<strong style="color: rgba(255, 247, 241, 0.85);">控制面板 → 网站设定 → 全站页面</strong></div>
+                                </div>
+                                <div class="hero-settings__row" style="text-align:right;">
+                                    <button type="button" class="hero-settings__reset" id="hero-reset-btn">恢复默认</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="swiper banner site-hero-banner__swiper">
+                            <div class="swiper-wrapper">
+                                
+                                    <div class="swiper-slide site-hero-banner__slide">
+                                        <a class="site-hero-banner__image-link" href="/torrents.php?medium13=1&amp;medium14=1&amp;incldead=0&amp;spstate=0&amp;inclbookmarked=0&amp;search=AudiesCC&amp;search_area=2&amp;search_mode=0">
+                                            <span class="site-hero-banner__backdrop" style="background-image: url('https://stor.picx.cx/images/2025/07/12/18lbp.png');" aria-hidden="true"></span>
+                                            <img class="site-hero-banner__image" src="https://stor.picx.cx/images/2025/07/12/18lbp.png" alt="Audiences banner" loading="eager" decoding="async" fetchpriority="high">
+                                        </a>
+                                    </div>
+                                    
+                                    <div class="swiper-slide site-hero-banner__slide">
+                                        <a class="site-hero-banner__image-link" href="/torrents.php?search_area=2&amp;search_mode=0&amp;search=缎带英雄">
+                                            <span class="site-hero-banner__backdrop" style="background-image: url('https://stor.picx.cx/images/2026/08/10/m9L62I.png');" aria-hidden="true"></span>
+                                            <img class="site-hero-banner__image" src="https://stor.picx.cx/images/2026/08/10/m9L62I.png" alt="Audiences banner" loading="lazy" decoding="async">
+                                        </a>
+                                    </div>
+                                    
+                                    <div class="swiper-slide site-hero-banner__slide">
+                                        <a class="site-hero-banner__image-link" href="/torrents.php?search_area=2&amp;search_mode=0&amp;search=龙之家族 第三季">
+                                            <span class="site-hero-banner__backdrop" style="background-image: url('https://stor.picx.cx/images/2026/06/22/my5txi.png');" aria-hidden="true"></span>
+                                            <img class="site-hero-banner__image" src="https://stor.picx.cx/images/2026/06/22/my5txi.png" alt="Audiences banner" loading="lazy" decoding="async">
+                                        </a>
+                                    </div>
+                                    
+                                    <div class="swiper-slide site-hero-banner__slide">
+                                        <a class="site-hero-banner__image-link" href="/torrents.php?search_area=2&amp;search_mode=0&amp;search=镖人">
+                                            <span class="site-hero-banner__backdrop" style="background-image: url('https://stor.picx.cx/images/2026/06/10/mMjGKt.png');" aria-hidden="true"></span>
+                                            <img class="site-hero-banner__image" src="https://stor.picx.cx/images/2026/06/10/mMjGKt.png" alt="Audiences banner" loading="lazy" decoding="async">
+                                        </a>
+                                    </div>
+                                    
+                                    <div class="swiper-slide site-hero-banner__slide">
+                                        <a class="site-hero-banner__image-link" href="/torrents.php?search_area=2&amp;search_mode=0&amp;search=躲在超市后门抽烟的两人">
+                                            <span class="site-hero-banner__backdrop" style="background-image: url('https://stor.picx.cx/images/2026/06/10/mMB4XX.jpg');" aria-hidden="true"></span>
+                                            <img class="site-hero-banner__image" src="https://stor.picx.cx/images/2026/06/10/mMB4XX.jpg" alt="Audiences banner" loading="lazy" decoding="async">
+                                        </a>
+                                    </div>
+                                    
+                                    <div class="swiper-slide site-hero-banner__slide">
+                                        <a class="site-hero-banner__image-link" href="/torrents.php?search_area=2&amp;search_mode=0&amp;search=真人快打2">
+                                            <span class="site-hero-banner__backdrop" style="background-image: url('https://stor.picx.cx/images/2026/06/10/mMBUgV.png');" aria-hidden="true"></span>
+                                            <img class="site-hero-banner__image" src="https://stor.picx.cx/images/2026/06/10/mMBUgV.png" alt="Audiences banner" loading="lazy" decoding="async">
+                                        </a>
+                                    </div>
+                                    
+                                    <div class="swiper-slide site-hero-banner__slide">
+                                        <a class="site-hero-banner__image-link" href="/torrents.php?search_area=2&amp;search_mode=0&amp;search=翘楚">
+                                            <span class="site-hero-banner__backdrop" style="background-image: url('https://stor.picx.cx/images/2026/06/02/mLC7wW.png');" aria-hidden="true"></span>
+                                            <img class="site-hero-banner__image" src="https://stor.picx.cx/images/2026/06/02/mLC7wW.png" alt="Audiences banner" loading="lazy" decoding="async">
+                                        </a>
+                                    </div>
+                                    
+                                    <div class="swiper-slide site-hero-banner__slide">
+                                        <a class="site-hero-banner__image-link" href="/torrents.php?search_area=2&amp;search_mode=0&amp;search=荒野机器人">
+                                            <span class="site-hero-banner__backdrop" style="background-image: url('https://img01.audiences.me/item/670f5c97d29ded1a8cf03d01.png');" aria-hidden="true"></span>
+                                            <img class="site-hero-banner__image" src="https://img01.audiences.me/item/670f5c97d29ded1a8cf03d01.png" alt="Audiences banner" loading="lazy" decoding="async">
+                                        </a>
+                                    </div>
+                                                                </div>
+                            <div class="site-hero-banner__overlay" aria-hidden="true"></div>
+                            <div class="swiper-button-prev site-hero-banner__nav-button site-hero-banner__nav-button--prev"></div>
+                            <div class="swiper-button-next site-hero-banner__nav-button site-hero-banner__nav-button--next"></div>
+                            <div class="hero-resize-handle hero-resize-handle--tl" data-edge="top"    role="separator" aria-label="拖动调整横幅高度" tabindex="0"></div>
+                            <div class="hero-resize-handle hero-resize-handle--tr" data-edge="top"    role="separator" aria-label="拖动调整横幅高度" tabindex="0"></div>
+                            <div class="hero-resize-handle hero-resize-handle--bl" data-edge="bottom" role="separator" aria-label="拖动调整横幅高度" tabindex="0"></div>
+                            <div class="hero-resize-handle hero-resize-handle--br" data-edge="bottom" role="separator" aria-label="拖动调整横幅高度" tabindex="0"></div>
+                        </div>
+                    </div>
+                    <script>
+                        var heroBannerSlideCount = document.querySelectorAll('.banner .swiper-slide').length;
+                        var swiper = new Swiper('.banner', {
+                            navigation: {
+                                nextEl: ".swiper-button-next",
+                                prevEl: ".swiper-button-prev",
+                            },
+                            slidesPerView: 1,
+                            loop: heroBannerSlideCount > 1,
+                            effect: "slide",
+                            speed: 600,
+                            grabCursor: true,
+                            autoplay: {
+                                delay: 3000,
+                                disableOnInteraction: false,
+                                pauseOnMouseEnter: true,
+                            },
+                        });
+
+                        // ===== 顶部横幅尺寸控制器 =====
+                        (function () {
+                            var STORAGE_KEY = 'audiesHeroBanner';
+                            var DEFAULTS = { visible: true, height: 300 };
+                            var MIN_H = 80, MAX_H = 500;
+                            var state = (window.__heroBannerState && typeof window.__heroBannerState === 'object')
+                                ? Object.assign({}, DEFAULTS, window.__heroBannerState)
+                                : Object.assign({}, DEFAULTS);
+
+                            var btn      = document.getElementById('hero-settings-btn');
+                            var wrap     = document.getElementById('hero-settings');
+                            var panel    = document.getElementById('hero-settings-panel');
+                            var resetBtn = document.getElementById('hero-reset-btn');
+                            var banner   = document.querySelector('.site-hero-banner');
+                            var handles  = document.querySelectorAll('.hero-resize-handle');
+
+                            if (!btn || !panel || !banner) return;
+
+                            function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+                            /*
+                             * 只把 height 写回 localStorage —— visible 已迁到后端 user_prefs，
+                             * 不再由前端存储/修改（前端拿到的 visible 是服务端注入的只读值）。
+                             */
+                            function save() {
+                                try {
+                                    localStorage.setItem(STORAGE_KEY, JSON.stringify({ height: state.height }));
+                                } catch (e) {}
+                            }
+
+                            function apply(skipSwiperUpdate) {
+                                document.documentElement.classList.toggle('hero-banner-hidden', !state.visible);
+                                banner.style.setProperty('--site-hero-banner-height', state.height + 'px');
+                                if (!skipSwiperUpdate && window.swiper && state.visible) {
+                                    try { window.swiper.update(); } catch (e) {}
+                                }
+                            }
+
+                            function openPanel(open) {
+                                panel.hidden = !open;
+                                wrap.classList.toggle('is-open', open);
+                                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                            }
+
+                            apply();
+
+                            btn.addEventListener('click', function (e) {
+                                e.stopPropagation();
+                                openPanel(panel.hidden);
+                            });
+
+                            panel.addEventListener('click', function (e) { e.stopPropagation(); });
+                            document.addEventListener('click', function () { openPanel(false); });
+                            document.addEventListener('keydown', function (e) {
+                                if (e.key === 'Escape' && !panel.hidden) openPanel(false);
+                            });
+
+                            // "恢复默认"仅作用于高度（visible 由后端管理）
+                            resetBtn.addEventListener('click', function () {
+                                state.height = DEFAULTS.height;
+                                apply(); save();
+                            });
+
+                            // ----- 四角拖动调整高度 -----
+                            var dragging = null; // { startY, startHeight, dir, handle }
+
+                            function onPointerDown(e) {
+                                if (e.button !== undefined && e.button !== 0) return;
+                                var handle = e.currentTarget;
+                                var edge = handle.getAttribute('data-edge'); // 'top' | 'bottom'
+                                dragging = {
+                                    startY: e.clientY,
+                                    startHeight: state.height,
+                                    dir: edge === 'top' ? -1 : 1, // 顶部手柄向下拖 = 变矮
+                                    handle: handle
+                                };
+                                handle.classList.add('is-dragging');
+                                document.documentElement.classList.add('hero-banner-resizing');
+                                if (handle.setPointerCapture && e.pointerId !== undefined) {
+                                    try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+                                }
+                                e.preventDefault();
+                            }
+
+                            function onPointerMove(e) {
+                                if (!dragging) return;
+                                var deltaY = e.clientY - dragging.startY;
+                                var newH = clamp(dragging.startHeight + dragging.dir * deltaY, MIN_H, MAX_H);
+                                state.height = Math.round(newH);
+                                apply(true); // 拖动过程中先不调用 swiper.update，性能优先
+                            }
+
+                            function onPointerUp() {
+                                if (!dragging) return;
+                                dragging.handle.classList.remove('is-dragging');
+                                document.documentElement.classList.remove('hero-banner-resizing');
+                                dragging = null;
+                                save();
+                                if (window.swiper) {
+                                    try { window.swiper.update(); } catch (e) {}
+                                }
+                            }
+
+                            for (var i = 0; i < handles.length; i++) {
+                                handles[i].addEventListener('pointerdown', onPointerDown);
+                                // 双击恢复默认高度
+                                handles[i].addEventListener('dblclick', function () {
+                                    state.height = DEFAULTS.height;
+                                    apply(); save();
+                                });
+                            }
+                            document.addEventListener('pointermove', onPointerMove);
+                            document.addEventListener('pointerup', onPointerUp);
+                            document.addEventListener('pointercancel', onPointerUp);
+                        })();
+                    </script>
+            </div>
+        </div>
+        <table class="mainouter site-mainouter site-mainouter--with-banner" cellspacing="0" cellpadding="5" align="center">
+        <tr>
+            <td id="nav_block" class="text" align="center">
+                <table class="main" width="1250" border="0" cellspacing="0" cellpadding="0"><tr><td class="embedded" ><div id="nav"><ul id="mainmenu" class="menu"><li><a href="index.php">&nbsp;首&nbsp;&nbsp;页&nbsp;</a></li><li><a href="forums.php">&nbsp;论&nbsp;&nbsp;坛&nbsp;</a></li><li><a href="torrents.php?cat401=1&cat402=1&cat403=1&cat406=1&showmovie=yes" rel="ddsubmenu6"> 影 &nbsp; 视</a></li><li><a href="torrents.php?cat=408&showmusic=yes" rel="ddsubmenu5"> 音 &nbsp; 乐</a></li><li><a href="torrents.php?cat404=1&cat405=1&showaudio=1" rel="ddsubmenu3"> 阅 &nbsp; 听</a></li><li><a href="torrents.php" rel="ddsubmenu1">&nbsp;综&nbsp;&nbsp;合&nbsp;</a></li><li><a href="torrents.php?hometeam=1&team19=1&team21=1&team20=1&team22=1&team23=1&team24=1" rel="ddsubmenu2">&nbsp;官&nbsp;&nbsp;组&nbsp;</a></li><li><a href="collection.php">&nbsp;合&nbsp;&nbsp;集&nbsp;</a></li><li><a href="claim.php?act=seeder">认领种子</a></li><li><a href="offers.php">&nbsp;候选&nbsp;(20)</a></li><li><a href="upload.php" rel="ddsubmenu4">&nbsp;发&nbsp;&nbsp;布&nbsp;</a></li><li><a href="viewrequests.php">&nbsp;求&nbsp;&nbsp;种&nbsp;</a></li><li><a href="subtitles.php">&nbsp;字&nbsp;&nbsp;幕&nbsp;</a></li><li><a href="topten.php" rel="ddsubmenu12">排&nbsp;行&nbsp;榜</a></li><li><a href="rules.php" rel="ddsubmenu11">&nbsp;规&nbsp;&nbsp;则&nbsp;</a></li><li><a href="staff.php">管&nbsp;理&nbsp;组</a></li><li><a href="donate.php" style='color: #a83838;'>捐赠VIP</a></li></ul><ul id="ddsubmenu1" class="ddsubmenustyle"><li><a href="torrents.php">全&nbsp;&nbsp;部</a></li><li><a href="torrents.php?cat=401">电&nbsp;&nbsp;影</a><ul><li><a href="javacript:void(0);">媒&nbsp;&nbsp;介</a><ul><li><a href="/torrents.php?cat401=1&medium12=1&medium13=1&medium1=1&medium14=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">Blu-ray</a></li><li><a href="/torrents.php?cat401=1&medium3=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">Remux</a></li><li><a href="/torrents.php?cat401=1&medium5=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">HDTV</a></li><li><a href="/torrents.php?cat401=1&medium10=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">WEB-DL</a></li><li><a href="/torrents.php?cat401=1&medium2=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">DVD(原盘)</a></li></ul></li><li><a href="javacript:void(0);">分辨率</a><ul><li><a href="/torrents.php?cat401=1&standard5=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">4K</a></li><li><a href="/torrents.php?cat401=1&standard1=1&standard2=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">1080P</a></li><li><a href="/torrents.php?cat401=1&standard3=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">720P</a></li><li><a href="/torrents.php?cat401=1&standard4=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">SD</a></li></ul></li></ul></li><li><a href="torrents.php?cat=402">剧&nbsp;&nbsp;集</a></li><li><a href="torrents.php?cat=403">综&nbsp;&nbsp;艺</a></li><li><a href="torrents.php?cat=406">纪录片</a></li><li><a href="torrents.php?cat=404">有声书</a></li><li><a href="torrents.php?cat=405">电子书</a></li><li><a href="torrents.php?cat=408">音&nbsp;&nbsp;乐</a>    <ul>
+        <li><a href=torrents.php?tag=22&showmusic=yes>音乐专辑</a></li>
+        <li><a href=torrents.php?tag=18&showmusic=yes> M V</a></li>
+        <li><a href=torrents.php?tag=21&showmusic=yes>演唱会</a></li>
+        <!--  <li><a href=torrents.php?tag=ok>卡拉OK</a></li>-->
+        <li><a href=torrents.php?tag=20&showmusic=yes>现场LIVE</a></li>
+    </ul></li>
+    <li><a href="torrents.php?cat=407">体&nbsp;&nbsp;育</a></li><li><a href="torrents.php?cat=410">游&nbsp;&nbsp;戏</a></li><li><a href="torrents.php?cat=412">教&nbsp;&nbsp;学</a></li><li><a href="torrents.php?cat=409">其&nbsp;&nbsp;他</a></li></ul><ul id="ddsubmenu2" class="ddsubmenustyle"><li><a href="torrents.php?hometeam=1&team19=1&team21=1&team20=1&team22=1&team23=1&team24=1">全&nbsp;&nbsp;部</a></li><li><a href="torrents.php?hometeam=1&team19=1">DiY</a></li><li><a href="torrents.php?hometeam=1&team21=1&medium3=1">Remux</a></li><li><a href="torrents.php?hometeam=1&team21=1&medium15=1">压&nbsp;&nbsp;制</a></li><li><a href="torrents.php?hometeam=1&team20=1">WEB-DL</a></li><li><a href="torrents.php?hometeam=1&team24=1">电子书</a></li><li><a href="torrents.php?hometeam=1&team23=1">有声书</a></li></ul><ul id="ddsubmenu3" class="ddsubmenustyle"><li><a href="torrents.php?cat404=1&cat405=1&showaudio=1">全&nbsp;&nbsp;部</a></li><li><a href="torrents.php?cat=404&showaudio=1">有声书</a></li><li><a href="torrents.php?cat=405&showaudio=1">电子书</a></li></ul><ul id="ddsubmenu4" class="ddsubmenustyle"><li><a href="upload.php">发布综合</a></li><li><a href="upload_music.php">音乐专辑</a></li></ul><ul id="ddsubmenu6" class="ddsubmenustyle"><li><a href="torrents.php?cat401=1&cat402=1&cat403=1&cat406=1&showmovie=yes">全&nbsp;&nbsp;部</a></li><li><a href="torrents.php?cat=401&showmovie=yes">电&nbsp;&nbsp;影</a></li><li><a href="torrents.php?cat=402&showmovie=yes">剧&nbsp;&nbsp;集</a></li><li><a href="torrents.php?cat=403&showmovie=yes">综&nbsp;&nbsp;艺</a></li><li><a href="torrents.php?cat=406&showmovie=yes">纪录片</a></li></ul><ul id="ddsubmenu11" class="ddsubmenustyle"><li><a href="faq.php">&nbsp;常见问题&nbsp;</a></li></ul><ul id="ddsubmenu12" class="ddsubmenustyle"><li><a href="log.php">&nbsp;日&nbsp;&nbsp;志&nbsp;</a></li></ul>    <ul id="ddsubmenu5" class="ddsubmenustyle">
+        <li><a href=torrents.php?cat=408&showmusic=yes>全&nbsp;&nbsp;部</a></li>
+        <li><a href=torrents.php?tag=22&showmusic=yes>音乐专辑</a></li>
+        <li><a href=torrents.php?tag=18&showmusic=yes> M V</a></li>
+        <li><a href=torrents.php?tag=21&showmusic=yes>演唱会</a></li>
+        <!-- <li><a href=torrents.php?tag=ok&showmusic=yes>卡拉OK</a></li>-->
+        <li><a href=torrents.php?tag=20&showmusic=yes>现场LIVE</a></li>
+    </ul></div>
+    </td></tr></table>
+                <table id="info_block" cellpadding="4" cellspacing="0" border="0" width="100%">
+                    <tr>
+                        <td>
+                            <table width="100%" cellspacing="0" cellpadding="0" border="0">
+                                <tr>
+                                    <td class="bottom" align="left">
+                                                                                <div class="site-userbar site-userbar--torrents">
+                                            <div class="site-userbar__surface">
+                                                <div class="site-userbar__compact">
+                                                    <div class="site-userbar__compact-showcase">
+                                                        <div class="site-userbar__profile">
+                                                            <div class="site-userbar__avatar">
+                                                                <img src="pic/default_avatar_v20260410.png" alt="exampleuser avatar" loading="lazy" />
+                                                            </div>
+                                                            <div class="site-userbar__compact-showcase-body">
+                                                                <div class="site-userbar__compact-kicker">个人概览</div>
+                                                                <div class="site-userbar__compact-identity">
+                                                                    <span class="torrent-uploader-wrap site-userbar__name" title="exampleuser" data-uploader-avatar="pic/default_avatar_v20260410.png" data-uploader-fallback="pic/default_avatar_v20260410.png" data-uploader-ring="User_Name torrent-uploader-preview__avatar--placeholder" data-uploader-label="exampleuser" data-uploader-url="userdetails.php?id=100001" data-uploader-badge="" data-uploader-medals="" data-uploader-accent="User_Name" data-uploader-meta-primary="UID 100001" data-uploader-stats="[{&quot;label&quot;:&quot;上传量：&quot;,&quot;value&quot;:&quot;0.00 GB&quot;,&quot;icon&quot;:&quot;fal fa-upload&quot;,&quot;tone&quot;:&quot;uploaded&quot;},{&quot;label&quot;:&quot;爆米花：&quot;,&quot;value&quot;:&quot;0&quot;,&quot;icon&quot;:&quot;fal fa-popcorn&quot;,&quot;tone&quot;:&quot;bonus&quot;},{&quot;label&quot;:&quot;下载量：&quot;,&quot;value&quot;:&quot;0.00 GB&quot;,&quot;icon&quot;:&quot;fal fa-download&quot;,&quot;tone&quot;:&quot;downloaded&quot;},{&quot;label&quot;:&quot;做种积分：&quot;,&quot;value&quot;:&quot;0&quot;,&quot;icon&quot;:&quot;fal fa-seedling&quot;,&quot;tone&quot;:&quot;seeding-bonus&quot;},{&quot;label&quot;:&quot;活跃&quot;,&quot;value&quot;:&quot;↑ 0 / ↓ 0&quot;,&quot;icon&quot;:&quot;fal fa-signal&quot;,&quot;tone&quot;:&quot;active&quot;},{&quot;label&quot;:&quot;排名&quot;,&quot;value&quot;:&quot;↑ 0 / ↓ 0&quot;,&quot;icon&quot;:&quot;fal fa-trophy&quot;,&quot;tone&quot;:&quot;rank&quot;}]" data-uploader-actions="[{&quot;label&quot;:&quot;控制面板&quot;,&quot;href&quot;:&quot;usercp.php&quot;,&quot;title&quot;:&quot;控制面板&quot;,&quot;icon&quot;:&quot;fal fa-sliders-h&quot;,&quot;tone&quot;:&quot;profile&quot;,&quot;badge&quot;:&quot;&quot;},{&quot;label&quot;:&quot;勋章中心&quot;,&quot;href&quot;:&quot;medal_center.php&quot;,&quot;title&quot;:&quot;勋章中心&quot;,&quot;icon&quot;:&quot;fal fa-award&quot;,&quot;tone&quot;:&quot;profile&quot;,&quot;badge&quot;:&quot;&quot;},{&quot;label&quot;:&quot;收藏&quot;,&quot;href&quot;:&quot;torrents.php?inclbookmarked=1&amp;allsec=1&amp;incldead=0&quot;,&quot;title&quot;:&quot;收藏&quot;,&quot;icon&quot;:&quot;fal fa-star&quot;,&quot;tone&quot;:&quot;profile&quot;,&quot;badge&quot;:&quot;&quot;},{&quot;label&quot;:&quot;RSS下载筐&quot;,&quot;href&quot;:&quot;myrss.php&quot;,&quot;title&quot;:&quot;RSS下载筐&quot;,&quot;icon&quot;:&quot;fal fa-rss&quot;,&quot;tone&quot;:&quot;profile&quot;,&quot;badge&quot;:&quot;&quot;},{&quot;label&quot;:&quot;RSS订阅&quot;,&quot;href&quot;:&quot;getrss.php&quot;,&quot;title&quot;:&quot;RSS订阅&quot;,&quot;icon&quot;:&quot;fal fa-rss-square&quot;,&quot;tone&quot;:&quot;profile&quot;,&quot;badge&quot;:&quot;&quot;},{&quot;label&quot;:&quot;邀请&quot;,&quot;href&quot;:&quot;invite.php?id=100001&quot;,&quot;title&quot;:&quot;邀请 0/0&quot;,&quot;icon&quot;:&quot;fal fa-user-plus&quot;,&quot;tone&quot;:&quot;profile&quot;,&quot;badge&quot;:&quot;0/0&quot;},{&quot;label&quot;:&quot;21点&quot;,&quot;href&quot;:&quot;/blackjack.php&quot;,&quot;title&quot;:&quot;21点&quot;,&quot;icon&quot;:&quot;fal fa-dice&quot;,&quot;tone&quot;:&quot;profile&quot;,&quot;badge&quot;:&quot;&quot;},{&quot;label&quot;:&quot;好友&quot;,&quot;href&quot;:&quot;friends.php&quot;,&quot;title&quot;:&quot;好友&quot;,&quot;icon&quot;:&quot;fal fa-user-friends&quot;,&quot;tone&quot;:&quot;profile&quot;,&quot;badge&quot;:&quot;&quot;},{&quot;label&quot;:&quot;退出&quot;,&quot;href&quot;:&quot;logout.php&quot;,&quot;title&quot;:&quot;退出&quot;,&quot;icon&quot;:&quot;fal fa-sign-out-alt&quot;,&quot;tone&quot;:&quot;logout&quot;}]"><span class="nowrap"><a  href="userdetails.php?id=100001" class='User_Name'><b>exampleuser</b></a></span></span>
+                                                                                                                                        <div class="site-userbar__compact-data">
+                                                                        <span class="site-userbar__compact-metric site-userbar__compact-metric--ratio"><i class="fas fa-chart-line" aria-hidden="true"></i><span>0.000</span></span>
+                                                                        <span class="site-userbar__compact-metric site-userbar__compact-metric--uploaded"><i class="fas fa-arrow-up" aria-hidden="true"></i><span>0.00 GB</span></span>
+                                                                        <span class="site-userbar__compact-metric site-userbar__compact-metric--downloaded"><i class="fas fa-arrow-down" aria-hidden="true"></i><span>0.00 GB</span></span>
+                                                                        <a class="site-userbar__compact-metric site-userbar__compact-metric--bonus site-userbar__compact-metric--link" href="mybonus.php" title="爆米花 0" aria-label="爆米花 0">
+                                                                            <i class="fal fa-popcorn" aria-hidden="true"></i>
+                                                                            <span>0</span>
+                                                                        </a>
+                                                                        <span class="site-userbar__compact-metric site-userbar__compact-metric--seeding-bonus" title="做种积分 0" aria-label="做种积分 0">
+                                                                            <i class="fal fa-seedling" aria-hidden="true"></i>
+                                                                            <span>0</span>
+                                                                        </span>
+                                                                        <span class="site-userbar__compact-metric site-userbar__compact-metric--active" title="活跃 ↑ 0 / ↓ 0" aria-label="活跃 ↑ 0 / ↓ 0">
+                                                                            <i class="fas fa-signal" aria-hidden="true"></i>
+                                                                            <span class="site-userbar__compact-active-links">
+                                                                                <a class="site-userbar__compact-metric-inline-link site-userbar__compact-metric-inline-link--seeding" href="torrents.php?mytorrent=seeding" title="点击查看做种中的我的种子" aria-label="点击查看做种中的我的种子">↑ 3</a>
+                                                                                <span class="site-userbar__compact-metric-inline-sep">/</span>
+                                                                                <a class="site-userbar__compact-metric-inline-link site-userbar__compact-metric-inline-link--leeching" href="torrents.php?mytorrent=leeching" title="点击查看下载中的我的种子" aria-label="点击查看下载中的我的种子">↓ 0</a>
+                                                                            </span>
+                                                                        </span>
+                                                                        <a class="site-userbar__compact-metric site-userbar__compact-metric--hr site-userbar__compact-metric--link" href="myhr.php" title="H&amp;R 0/0/0" aria-label="H&amp;R 0/0/0">
+                                                                            <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                                                                            <span>0/0/0</span>
+                                                                        </a>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    
+                                                    <div class="site-userbar__compact-actions">
+                                                        <div class="site-userbar__compact-action-group">
+                                                                                                                                        <a class="site-userbar__compact-tool" href="attendance.php">
+                                                                                <i class="fas fa-calendar-check" aria-hidden="true"></i>
+                                                                                <strong>签到</strong>
+                                                                            </a>
+                                                                                                                                                <a class="site-userbar__compact-tool" href="messages.php" title="收件箱 0" aria-label="收件箱 0">
+                                                                            <i class="fas fa-inbox" aria-hidden="true"></i>
+                                                                            <strong>收件箱</strong>
+                                                                            <span class="site-userbar__compact-tool-badge">0</span>
+                                                                        </a>
+                                                                                                                                                <a class="site-userbar__compact-tool" href="messages.php?action=viewmailbox&amp;box=-1" title="发件箱 0" aria-label="发件箱 0">
+                                                                            <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                                                                            <strong>发件箱</strong>
+                                                                            <span class="site-userbar__compact-tool-badge">0</span>
+                                                                        </a>
+                                                                                                                                                                                                                                                        </div>
+                                                    </div>
+                                                </div>
+                                                                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td class="bottom" align="right">
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+
+            </td>
+        </tr>
+
+        <tr>
+            <td id="outer" align="center" class="outer" style="padding-top: 20px; padding-bottom: 20px">
+                <div align="center" style="margin-bottom: 10px" id="ad_belownav"><p>
+  <span style="
+        font-size: 20px;
+        font-family: tahoma, arial, helvetica, sans-serif;
+        text-align: -webkit-center;
+        color: rgb(0, 0, 0);
+        text-decoration-line: none;
+      ">
+      <span style="
+      font-size: 20px;
+      font-family: tahoma, arial, helvetica, sans-serif;
+      text-align: -webkit-center;"><strong><a 
+            href="https://audiences.me/forums.php?action=viewtopic&forumid=21&topicid=217"
+            target="_self">站點必要時會關閉游客訪問，請儘快綁定Bot或保存好瀏覽器cookie</a></strong></span>
+      <br />
+    <span><strong><a href="https://audiences.me/usercp.php?action=bind" target="_self"
+            style="color: red;
+                   font-size: 28px">控制面板綁定后加入交流群：</a></strong><a href="https://t.me/+Jig4llSsv8Y2NGU0" target="_blank"><img alt="telegram_icon" width="24px" height="24px" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB3aWR0aD0iMTAwMHB4IiBoZWlnaHQ9IjEwMDBweCIgdmlld0JveD0iMCAwIDEwMDAgMTAwMCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIj4KICAgIDxkZWZzPgogICAgICAgIDxsaW5lYXJHcmFkaWVudCB4MT0iNTAlIiB5MT0iMCUiIHgyPSI1MCUiIHkyPSI5OS4yNTgzNDA0JSIgaWQ9ImxpbmVhckdyYWRpZW50LTEiPgogICAgICAgICAgICA8c3RvcCBzdG9wLWNvbG9yPSIjMkFBQkVFIiBvZmZzZXQ9IjAlIj48L3N0b3A+CiAgICAgICAgICAgIDxzdG9wIHN0b3AtY29sb3I9IiMyMjlFRDkiIG9mZnNldD0iMTAwJSI+PC9zdG9wPgogICAgICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8L2RlZnM+CiAgICA8ZyBpZD0iQXJ0Ym9hcmQiIHN0cm9rZT0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIxIiBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPgogICAgICAgIDxjaXJjbGUgaWQ9Ik92YWwiIGZpbGw9InVybCgjbGluZWFyR3JhZGllbnQtMSkiIGN4PSI1MDAiIGN5PSI1MDAiIHI9IjUwMCI+PC9jaXJjbGU+CiAgICAgICAgPHBhdGggZD0iTTIyNi4zMjg0MTksNDk0LjcyMjA2OSBDMzcyLjA4ODU3Myw0MzEuMjE2Njg1IDQ2OS4yODQ4MzksMzg5LjM1MDA0OSA1MTcuOTE3MjE2LDM2OS4xMjIxNjEgQzY1Ni43NzI1MzUsMzExLjM2NzQzIDY4NS42MjU0ODEsMzAxLjMzNDgxNSA3MDQuNDMxNDI3LDMwMS4wMDM1MzIgQzcwOC41Njc2MjEsMzAwLjkzMDY3IDcxNy44MTU4MzksMzAxLjk1NTc0MyA3MjMuODA2NDQ2LDMwNi44MTY3MDcgQzcyOC44NjQ3OTcsMzEwLjkyMTIxIDczMC4yNTY1NTIsMzE2LjQ2NTgxIDczMC45MjI1NTEsMzIwLjM1NzMyOSBDNzMxLjU4ODU1MSwzMjQuMjQ4ODQ4IDczMi40MTc4NzksMzMzLjExMzgyOCA3MzEuNzU4NjI2LDM0MC4wNDA2NjYgQzcyNC4yMzQwMDcsNDE5LjEwMjQ4NiA2OTEuNjc1MTA0LDYxMC45NjQ2NzQgNjc1LjExMDk4Miw2OTkuNTE1MjY3IEM2NjguMTAyMDgsNzM2Ljk4NDM0MiA2NTQuMzAxMzM2LDc0OS41NDc1MzIgNjQwLjk0MDYxOCw3NTAuNzc3MDA2IEM2MTEuOTA0Njg0LDc1My40NDg5MzggNTg5Ljg1NjExNSw3MzEuNTg4MDM1IDU2MS43MzMzOTMsNzEzLjE1MzIzNyBDNTE3LjcyNjg4Niw2ODQuMzA2NDE2IDQ5Mi44NjYwMDksNjY2LjM0OTE4MSA0NTAuMTUwMDc0LDYzOC4yMDAwMTMgQzQwMC43ODQ0Miw2MDUuNjY4NzggNDMyLjc4NjExOSw1ODcuNzg5MDQ4IDQ2MC45MTk0NjIsNTU4LjU2ODU2MyBDNDY4LjI4MjA5MSw1NTAuOTIxNDIzIDU5Ni4yMTUwOCw0MzQuNTU2NDc5IDU5OC42OTEyMjcsNDI0LjAwMDM1NSBDNTk5LjAwMDkxLDQyMi42ODAxMzUgNTk5LjI4ODMxMiw0MTcuNzU4OTgxIDU5Ni4zNjQ3NCw0MTUuMTYwNDMxIEM1OTMuNDQxMTY4LDQxMi41NjE4ODEgNTg5LjEyNjIyOSw0MTMuNDUwNDg0IDU4Ni4wMTI0NDgsNDE0LjE1NzE5OCBDNTgxLjU5ODc1OCw0MTUuMTU4OTQzIDUxMS4yOTc3OTMsNDYxLjYyNTI3NCAzNzUuMTA5NTUzLDU1My41NTYxODkgQzM1NS4xNTQ4NTgsNTY3LjI1ODYyMyAzMzcuMDgwNTE1LDU3My45MzQ5MDggMzIwLjg4NjUyNCw1NzMuNTg1MDQ2IEMzMDMuMDMzOTQ4LDU3My4xOTkzNTEgMjY4LjY5Mjc1NCw1NjMuNDkwOTI4IDI0My4xNjM2MDYsNTU1LjE5MjQwOCBDMjExLjg1MTA2Nyw1NDUuMDEzOTM2IDE4Ni45NjQ0ODQsNTM5LjYzMjUwNCAxODkuMTMxNTQ3LDUyMi4zNDYzMDkgQzE5MC4yNjAyODcsNTEzLjM0MjU4OSAyMDIuNjU5MjQ0LDUwNC4xMzQ1MDkgMjI2LjMyODQxOSw0OTQuNzIyMDY5IFoiIGlkPSJQYXRoLTMiIGZpbGw9IiNGRkZGRkYiPjwvcGF0aD4KICAgIDwvZz4KPC9zdmc+" />
+        Telegram 2.0</a> | <a href="https://qm.qq.com/q/rTf96RrGqk" target="_blank">
+            <img alt="qq_icon" width="24px" height="24px"
+              src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iODAwIiB3aWR0aD0iMTIwMCIgdmlld0JveD0iMTUgLTIwIDEwMCAxNjAiPjxwYXRoIGZpbGw9IiNmYWFiMDciIGQ9Ik02MC41MDMgMTQyLjIzN2MtMTIuNTMzIDAtMjQuMDM4LTQuMTk1LTMxLjQ0NS0xMC40Ni0zLjc2MiAxLjEyNC04LjU3NCAyLjkzMi0xMS42MSA1LjE3NS0yLjYgMS45MTgtMi4yNzUgMy44NzQtMS44MDcgNC42NjMgMi4wNTYgMy40NyAzNS4yNzMgMi4yMTYgNDQuODYyIDEuMTM2em0wIDBjMTIuNTM1IDAgMjQuMDM5LTQuMTk1IDMxLjQ0Ny0xMC40NiAzLjc2IDEuMTI0IDguNTczIDIuOTMyIDExLjYxIDUuMTc1IDIuNTk4IDEuOTE4IDIuMjc0IDMuODc0IDEuODA1IDQuNjYzLTIuMDU2IDMuNDctMzUuMjcyIDIuMjE2LTQ0Ljg2MiAxLjEzNnptMCAwIi8+PHBhdGggZD0iTTYwLjU3NiA2Ny4xMTljMjAuNjk4LS4xNCAzNy4yODYtNC4xNDcgNDIuOTA3LTUuNjgzIDEuMzQtLjM2NyAyLjA1Ni0xLjAyNCAyLjA1Ni0xLjAyNC4wMDUtLjE4OS4wODUtMy4zNy4wODUtNS4wMUMxMDUuNjI0IDI3Ljc2OCA5Mi41OC4wMDEgNjAuNSAwIDI4LjQyLjAwMSAxNS4zNzUgMjcuNzY5IDE1LjM3NSA1NS40MDFjMCAxLjY0Mi4wOCA0LjgyMi4wODYgNS4wMSAwIDAgLjU4My42MTUgMS42NS45MTMgNS4xOSAxLjQ0NCAyMi4wOSA1LjY1IDQzLjMxMiA1Ljc5NXptNTYuMjQ1IDIzLjAyYy0xLjI4My00LjEyOS0zLjAzNC04Ljk0NC00LjgwOC0xMy41NjggMCAwLTEuMDItLjEyNi0xLjUzNy4wMjMtMTUuOTEzIDQuNjIzLTM1LjIwMiA3LjU3LTQ5LjkgNy4zOTJoLS4xNTNjLTE0LjYxNi4xNzUtMzMuNzc0LTIuNzM3LTQ5LjYzNC03LjMxNS0uNjA2LS4xNzUtMS44MDItLjEtMS44MDItLjEtMS43NzQgNC42MjQtMy41MjUgOS40NC00LjgwOCAxMy41NjgtNi4xMTkgMTkuNjktNC4xMzYgMjcuODM4LTIuNjI3IDI4LjAyIDMuMjM5LjM5MiAxMi42MDYtMTQuODIxIDEyLjYwNi0xNC44MjEgMCAxNS40NTkgMTMuOTU3IDM5LjE5NSA0NS45MTggMzkuNDEzaC44NDhjMzEuOTYtLjIxOCA0NS45MTctMjMuOTU0IDQ1LjkxNy0zOS40MTMgMCAwIDkuMzY4IDE1LjIxMyAxMi42MDcgMTQuODIyIDEuNTA4LS4xODMgMy40OTEtOC4zMzItMi42MjctMjguMDIxIi8+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTQ5LjA4NSA0MC44MjRjLTQuMzUyLjE5Ny04LjA3LTQuNzYtOC4zMDQtMTEuMDYzLS4yMzYtNi4zMDUgMy4wOTgtMTEuNTc2IDcuNDUtMTEuNzczIDQuMzQ3LS4xOTUgOC4wNjQgNC43NiA4LjMgMTEuMDY1LjIzOCA2LjMwNi0zLjA5NyAxMS41NzctNy40NDYgMTEuNzcxbTMxLjEzMy0xMS4wNjNjLS4yMzMgNi4zMDItMy45NTEgMTEuMjYtOC4zMDMgMTEuMDYzLTQuMzUtLjE5NS03LjY4NC01LjQ2NS03LjQ0Ni0xMS43Ny4yMzYtNi4zMDUgMy45NTItMTEuMjYgOC4zLTExLjA2NiA0LjM1Mi4xOTcgNy42ODYgNS40NjggNy40NDkgMTEuNzczIi8+PHBhdGggZmlsbD0iI2ZhYWIwNyIgZD0iTTg3Ljk1MiA0OS43MjVDODYuNzkgNDcuMTUgNzUuMDc3IDQ0LjI4IDYwLjU3OCA0NC4yOGgtLjE1NmMtMTQuNSAwLTI2LjIxMiAyLjg3LTI3LjM3NSA1LjQ0NmEuODYzLjg2MyAwIDAwLS4wODUuMzY3Ljg4Ljg4IDAgMDAuMTYuNDk2Yy45OCAxLjQyNyAxMy45ODUgOC40ODcgMjcuMyA4LjQ4N2guMTU2YzEzLjMxNCAwIDI2LjMxOS03LjA1OCAyNy4yOTktOC40ODdhLjg3My44NzMgMCAwMC4xNi0uNDk4Ljg1Ni44NTYgMCAwMC0uMDg1LS4zNjUiLz48cGF0aCBkPSJNNTQuNDM0IDI5Ljg1NGMuMTk5IDIuNDktMS4xNjcgNC43MDItMy4wNDYgNC45NDMtMS44ODMuMjQyLTMuNTY4LTEuNTgtMy43NjgtNC4wNy0uMTk3LTIuNDkyIDEuMTY3LTQuNzA0IDMuMDQzLTQuOTQ0IDEuODg2LS4yNDQgMy41NzQgMS41OCAzLjc3MSA0LjA3bTExLjk1Ni44MzNjLjM4NS0uNjg5IDMuMDA0LTQuMzEyIDguNDI3LTIuOTkzIDEuNDI1LjM0NyAyLjA4NC44NTcgMi4yMjMgMS4wNTcuMjA1LjI5Ni4yNjIuNzE4LjA1MyAxLjI4Ni0uNDEyIDEuMTI2LTEuMjYzIDEuMDk1LTEuNzM0Ljg3NS0uMzA1LS4xNDItNC4wODItMi42Ni03LjU2MiAxLjA5Ny0uMjQuMjU3LS42NjguMzQ2LTEuMDczLjA0LS40MDctLjMwOC0uNTc0LS45My0uMzM0LTEuMzYyIi8+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTYwLjU3NiA4My4wOGgtLjE1M2MtOS45OTYuMTItMjIuMTE2LTEuMjA0LTMzLjg1NC0zLjUxOC0xLjAwNCA1LjgxOC0xLjYxIDEzLjEzMi0xLjA5IDIxLjg1MyAxLjMxNiAyMi4wNDMgMTQuNDA3IDM1LjkgMzQuNjE0IDM2LjFoLjgyYzIwLjIwOC0uMiAzMy4yOTgtMTQuMDU3IDM0LjYxNi0zNi4xLjUyLTguNzIzLS4wODctMTYuMDM1LTEuMDkyLTIxLjg1NC0xMS43MzkgMi4zMTUtMjMuODYyIDMuNjQtMzMuODYgMy41MTgiLz48cGF0aCBmaWxsPSIjZWIxOTIzIiBkPSJNMzIuMTAyIDgxLjIzNXYyMS42OTNzOS45MzcgMi4wMDQgMTkuODkzLjYxNlY4My41MzVjLTYuMzA3LS4zNTctMTMuMTA5LTEuMTUyLTE5Ljg5My0yLjMiLz48cGF0aCBmaWxsPSIjZWIxOTIzIiBkPSJNMTA1LjUzOSA2MC40MTJzLTE5LjMzIDYuMTAyLTQ0Ljk2MyA2LjI3NWgtLjE1M2MtMjUuNTkxLS4xNzItNDQuODk2LTYuMjU1LTQ0Ljk2Mi02LjI3NUw4Ljk4NyA3Ni41N2MxNi4xOTMgNC44ODIgMzYuMjYxIDguMDI4IDUxLjQzNiA3Ljg0NWguMTUzYzE1LjE3NS4xODMgMzUuMjQyLTIuOTYzIDUxLjQzNy03Ljg0NXptMCAwIi8+PC9zdmc+" />
+            QQ</a></strong><br />
+      <span style="
+          font-size: 28px;
+          font-family: tahoma, arial, helvetica, sans-serif;
+          text-align: -webkit-center;
+        "><strong><a href="https://audiences.me/forums.php?action=viewforum&forumid=2" target="_self"
+            style="color: red">Audiences 官組 招募詳情</a></strong><strong> | </strong>
+        <strong><a href="https://audiences.me/contactstaff.php" target="_self">招流媒体平台WEB工具技术大佬</a></strong></span><br />
+      <span style="
+      font-size: 28px;
+      font-family: tahoma, arial, helvetica, sans-serif;
+      text-align: -webkit-center;"><strong><a 
+            href="https://audiences.me/forums.php?action=viewtopic&forumid=19&topicid=1779"
+            target="_self">共同維護站點穩定，請勿在公開場合提及本站（公開場合概念請點擊）</a></strong></span>
+</p></div><div style='border:1px solid #9BDF70; background-color:#F0FBEB; width:500px; height:90px; margin-bottom: 10px; padding: 5px; line-height: 28px;font-size: 16px;'><b style='text-align: center'>全局优惠生效：官组FREE</b><br>优惠开始：2026-10-04 00:00:00 (GMT+08:00)<br>优惠截止：2026-10-08 23:59:59 (GMT+08:00)</div><table class="main" width="1250" border="0" cellspacing="0" cellpadding="0"><tr><td class="embedded" ><div class="attendance-page"><div class="attendance-hero"><div class="attendance-hero__badge"><i class="fas fa-calendar-check" aria-hidden="true"></i></div><div class="attendance-hero__text"><h1 class="attendance-hero__title">每日签到</h1><p class="attendance-hero__sub">完成人机验证即可领取今日爆米花奖励</p></div></div><div class="attendance-card attendance-card--verify"><div class="attendance-card__icon"><i class="fas fa-shield-alt" aria-hidden="true"></i></div><h2 class="attendance-card__title">人机验证</h2><p class="attendance-card__desc">验证通过后将自动完成签到</p>        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
+        <script>
+            function cfCallback(token) {
+                document.getElementById("attendance-form").submit();
+            }
+        </script>
+        <form id="attendance-form" action="attendance.php" method="post" class="attendance-card__form">
+            <input type="hidden" name="cf-token" id="cf-token" value="">
+            <div
+                class="cf-turnstile"
+                data-sitekey="0x4AAAAAABfcR5-BOyur3FT4"
+                data-callback="cfCallback"
+            ></div>
+        </form>
+        </div><section class="attendance-rules"><h2 class="attendance-rules__title"><i class="fas fa-award" aria-hidden="true"></i>签到奖励规则</h2><div class="attendance-rules__base"><article class="attendance-rule"><div class="attendance-rule__icon attendance-rule__icon--gift"><i class="fas fa-gift" aria-hidden="true"></i></div><div class="attendance-rule__body"><span class="attendance-rule__label">首次签到</span><span class="attendance-rule__text">首次签到获得 20 粒爆米花。</span></div></article><article class="attendance-rule"><div class="attendance-rule__icon attendance-rule__icon--coin"><i class="fas fa-coins" aria-hidden="true"></i></div><div class="attendance-rule__body"><span class="attendance-rule__label">每日累加</span><span class="attendance-rule__text">每次签到可额外获得 2 粒爆米花，直到 200 封顶。</span></div></article></div><div class="attendance-streak"><div class="attendance-streak__head"><i class="fas fa-fire" aria-hidden="true"></i><span>连续签到加成</span></div><p class="attendance-streak__note">连续签到达到对应天数后，每次签到额外获得爆米花（不累计）。</p><div class="attendance-streak__grid"><div class="attendance-streak__chip"><span class="attendance-streak__day">10天</span><span class="attendance-streak__bonus">+10</span></div><div class="attendance-streak__chip"><span class="attendance-streak__day">20天</span><span class="attendance-streak__bonus">+20</span></div><div class="attendance-streak__chip"><span class="attendance-streak__day">30天</span><span class="attendance-streak__bonus">+30</span></div><div class="attendance-streak__chip"><span class="attendance-streak__day">40天</span><span class="attendance-streak__bonus">+40</span></div><div class="attendance-streak__chip"><span class="attendance-streak__day">50天</span><span class="attendance-streak__bonus">+50</span></div><div class="attendance-streak__chip"><span class="attendance-streak__day">60天</span><span class="attendance-streak__bonus">+60</span></div><div class="attendance-streak__chip"><span class="attendance-streak__day">70天</span><span class="attendance-streak__bonus">+70</span></div><div class="attendance-streak__chip"><span class="attendance-streak__day">80天</span><span class="attendance-streak__bonus">+80</span></div><div class="attendance-streak__chip"><span class="attendance-streak__day">90天</span><span class="attendance-streak__bonus">+90</span></div><div class="attendance-streak__chip"><span class="attendance-streak__day">100天</span><span class="attendance-streak__bonus">+100</span></div><div class="attendance-streak__chip"><span class="attendance-streak__day">150天</span><span class="attendance-streak__bonus">+200</span></div></div></div></section></div></td></tr></table>
+</td></tr></table><div id="footer"><div class="site-footer-meta" style="margin-top: 10px; margin-bottom: 30px;" align="center"> (c)  <a href="https://audiences.me" target="_self">Audiences</a> 2021-2026 Powered by <a href="aboutnexus.php">NexusPHP</a><br /><br />[page created in <b> 73 </b> MS /  With <b>16</b> db queries, <b>21</b> reads and <b>13</b> writes of Redis and <b>0.00 GB</b> ram / Running PHP v8.2.16]</div>
+<div style="display: none;" id="lightbox" class="lightbox"></div><div style="display: none;" id="curtain" class="curtain"></div><script>
+(function () {
+    if (window.__torrentUploaderPreviewInit) return;
+    window.__torrentUploaderPreviewInit = true;
+
+    function closestUserbarPreviewAnchor(node) {
+        var current = node;
+        var allowed = false;
+        var anchor;
+
+        while (current && current !== document) {
+            if (current.classList) {
+                if (
+                    current.classList.contains('site-userbar__avatar') ||
+                    current.classList.contains('site-userbar__name') ||
+                    current.classList.contains('site-userbar__medals')
+                ) {
+                    allowed = true;
+                }
+                if (current.classList.contains('site-userbar__profile')) {
+                    if (!allowed) return null;
+                    anchor = current.querySelector('.site-userbar__name.torrent-uploader-wrap[data-uploader-avatar]');
+                    return anchor || null;
+                }
+            }
+            current = current.parentNode;
+        }
+        return null;
+    }
+
+    function closestUploader(node) {
+        var userbarAnchor = closestUserbarPreviewAnchor(node);
+        if (userbarAnchor) {
+            return userbarAnchor;
+        }
+
+        while (node && node !== document) {
+            if (node.classList && node.classList.contains('torrent-uploader-wrap') && node.getAttribute('data-uploader-avatar')) {
+                return node;
+            }
+            node = node.parentNode;
+        }
+        return null;
+    }
+
+    function ensurePreview() {
+        var preview = document.getElementById('torrent-uploader-preview');
+        if (preview) return preview;
+        preview = document.createElement('div');
+        preview.id = 'torrent-uploader-preview';
+        preview.className = 'torrent-uploader-preview';
+        preview.setAttribute('aria-hidden', 'true');
+        preview.innerHTML = '' +
+            '<div class="torrent-uploader-preview__card">' +
+                '<div class="torrent-uploader-preview__aside">' +
+                    '<span class="torrent-uploader-preview__avatar torrent-uploader-preview__avatar--default"><img alt=""></span>' +
+                '</div>' +
+                '<div class="torrent-uploader-preview__content">' +
+                    '<div class="torrent-uploader-preview__header">' +
+                        '<span class="torrent-uploader-preview__name-row">' +
+                            '<a class="torrent-uploader-preview__name" href="#" tabindex="-1"></a>' +
+                            '<span class="torrent-uploader-preview__medals"></span>' +
+                        '</span>' +
+                        '<span class="torrent-uploader-preview__badge torrent-uploader-preview__badge--default"></span>' +
+                    '</div>' +
+                    '<div class="torrent-uploader-preview__stats"></div>' +
+                    '<div class="torrent-uploader-preview__actions"></div>' +
+                    '<div class="torrent-uploader-preview__meta torrent-uploader-preview__meta--primary"></div>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(preview);
+        return preview;
+    }
+
+    var preview = ensurePreview();
+    var aside = preview.querySelector('.torrent-uploader-preview__aside');
+    var avatar = preview.querySelector('.torrent-uploader-preview__avatar');
+    var image = preview.querySelector('img');
+    var name = preview.querySelector('.torrent-uploader-preview__name');
+    var medals = preview.querySelector('.torrent-uploader-preview__medals');
+    var badge = preview.querySelector('.torrent-uploader-preview__badge');
+    var stats = preview.querySelector('.torrent-uploader-preview__stats');
+    var actions = preview.querySelector('.torrent-uploader-preview__actions');
+    var metaPrimary = preview.querySelector('.torrent-uploader-preview__meta--primary');
+    var active = null;
+    var hideTimer = null;
+    var showTimer = null;
+    var pendingTarget = null;
+    var showDelayMs = 320;
+
+    function clearHideTimer() {
+        if (hideTimer) {
+            clearTimeout(hideTimer);
+            hideTimer = null;
+        }
+    }
+
+    function clearShowTimer() {
+        if (showTimer) {
+            clearTimeout(showTimer);
+            showTimer = null;
+        }
+        pendingTarget = null;
+    }
+
+    function scheduleHide() {
+        clearHideTimer();
+        hideTimer = setTimeout(hidePreview, 300);
+    }
+
+    function scheduleShow(target) {
+        if (!target) return;
+
+        clearHideTimer();
+        if (active === target && preview.getAttribute('aria-hidden') === 'false') {
+            clearShowTimer();
+            return;
+        }
+        if (pendingTarget === target) {
+            return;
+        }
+        if (active && active !== target && preview.getAttribute('aria-hidden') === 'false') {
+            hidePreview();
+        } else {
+            clearShowTimer();
+        }
+
+        pendingTarget = target;
+        showTimer = setTimeout(function () {
+            showTimer = null;
+            if (pendingTarget !== target) return;
+            pendingTarget = null;
+            showPreview(target);
+        }, showDelayMs);
+    }
+
+    function setText(el, value) {
+        if (!value) {
+            el.textContent = '';
+            el.style.display = 'none';
+            return;
+        }
+        el.textContent = value;
+        el.style.display = '';
+    }
+
+    function splitStatValueText(valueText) {
+        var text = String(valueText || '');
+        var match = text.match(/^(-?\d[\d,]*(?:\.\d+)?)(.*)$/);
+        if (!match) {
+            return {
+                number: text,
+                unit: ''
+            };
+        }
+        return {
+            number: match[1],
+            unit: (match[2] || '').replace(/^\s+/, '')
+        };
+    }
+
+    function setStats(el, serialized) {
+        var items = [];
+        var i;
+        var labelText;
+        var valueText;
+        var iconClass;
+        var toneClass;
+        var titleText;
+        var valueParts;
+
+        el.innerHTML = '';
+        try {
+            items = JSON.parse(serialized || '[]');
+        } catch (err) {
+            items = [];
+        }
+        if (!items.length) {
+            el.style.display = 'none';
+            return;
+        }
+        for (i = 0; i < items.length; i += 1) {
+            if (!items[i]) continue;
+            labelText = items[i].label || '';
+            valueText = items[i].value || '';
+            iconClass = items[i].icon || '';
+            toneClass = items[i].tone || '';
+            if (!labelText && !valueText) continue;
+            var stat = document.createElement('span');
+            stat.className = 'torrent-uploader-preview__stat';
+            if (toneClass) {
+                stat.className += ' torrent-uploader-preview__stat--' + toneClass;
+            }
+            titleText = labelText;
+            if (valueText) {
+                titleText = titleText ? (titleText + ' ' + valueText) : valueText;
+            }
+            if (titleText) {
+                stat.title = titleText;
+                stat.setAttribute('aria-label', titleText);
+            }
+
+            if (iconClass) {
+                var iconNodeWrap = document.createElement('span');
+                iconNodeWrap.className = 'torrent-uploader-preview__stat-icon';
+                iconNodeWrap.setAttribute('aria-hidden', 'true');
+
+                var iconNode = document.createElement('i');
+                iconNode.className = iconClass;
+                iconNode.setAttribute('aria-hidden', 'true');
+                iconNodeWrap.appendChild(iconNode);
+                stat.appendChild(iconNodeWrap);
+            } else if (labelText) {
+                var labelNode = document.createElement('span');
+                labelNode.className = 'torrent-uploader-preview__stat-label';
+                labelNode.textContent = labelText;
+                stat.appendChild(labelNode);
+            }
+
+            var valueNode = document.createElement('span');
+            valueNode.className = 'torrent-uploader-preview__stat-value';
+            valueParts = splitStatValueText(valueText);
+
+            var numberNode = document.createElement('span');
+            numberNode.className = 'torrent-uploader-preview__stat-number';
+            numberNode.textContent = valueParts.number || valueText;
+            valueNode.appendChild(numberNode);
+
+            if (valueParts.unit) {
+                var unitNode = document.createElement('span');
+                unitNode.className = 'torrent-uploader-preview__stat-unit';
+                unitNode.textContent = valueParts.unit;
+                valueNode.appendChild(unitNode);
+            }
+
+            stat.appendChild(valueNode);
+
+            el.appendChild(stat);
+        }
+        if (!el.children.length) {
+            el.style.display = 'none';
+            return;
+        }
+        el.style.display = '';
+    }
+
+    function setActions(el, serialized) {
+        var items = [];
+        var i;
+        var item;
+        var href;
+        var labelText;
+        var titleText;
+        var iconClass;
+        var toneClass;
+
+        el.innerHTML = '';
+        try {
+            items = JSON.parse(serialized || '[]');
+        } catch (err) {
+            items = [];
+        }
+        if (!items.length) {
+            el.style.display = 'none';
+            return;
+        }
+        for (i = 0; i < items.length; i += 1) {
+            item = items[i] || {};
+            href = item.href || '';
+            labelText = item.label || '';
+            titleText = item.title || labelText;
+            iconClass = item.icon || '';
+            toneClass = item.tone || '';
+            if (!href || !labelText) continue;
+
+            var actionLink = document.createElement('a');
+            actionLink.className = 'torrent-uploader-preview__action';
+            if (toneClass) {
+                actionLink.className += ' torrent-uploader-preview__action--' + toneClass;
+            }
+            actionLink.href = href;
+            if (titleText) {
+                actionLink.title = titleText;
+                actionLink.setAttribute('aria-label', titleText);
+            }
+
+            if (iconClass) {
+                var iconWrap = document.createElement('span');
+                iconWrap.className = 'torrent-uploader-preview__action-icon';
+                iconWrap.setAttribute('aria-hidden', 'true');
+
+                var iconNode = document.createElement('i');
+                iconNode.className = iconClass;
+                iconNode.setAttribute('aria-hidden', 'true');
+                iconWrap.appendChild(iconNode);
+                actionLink.appendChild(iconWrap);
+            }
+
+            var actionLabel = document.createElement('span');
+            actionLabel.className = 'torrent-uploader-preview__action-text';
+            actionLabel.textContent = labelText;
+            actionLink.appendChild(actionLabel);
+
+            // badge：如果 action 带了 badge 字段（收件箱/发件箱/邀请等动态数量），
+            // 在 label 后追加一个小 pill，不影响无 badge 的入口（控制面板/21点等）。
+            var badgeText = item.badge || '';
+            if (badgeText) {
+                var badgeNode = document.createElement('span');
+                badgeNode.className = 'torrent-uploader-preview__action-badge';
+                badgeNode.textContent = badgeText;
+                actionLink.appendChild(badgeNode);
+            }
+            el.appendChild(actionLink);
+        }
+        if (!el.children.length) {
+            el.style.display = 'none';
+            return;
+        }
+        el.style.display = '';
+    }
+
+    function setAccentedText(el, text, className) {
+        var textNode;
+
+        while (el.firstChild) {
+            el.removeChild(el.firstChild);
+        }
+        if (!text) {
+            return;
+        }
+
+        textNode = document.createElement('span');
+        if (className && className !== 'torrent-uploader-preview__badge--default') {
+            textNode.className = className;
+        }
+        textNode.textContent = text;
+        el.appendChild(textNode);
+    }
+
+    function populatePreview(target) {
+        var label = target.getAttribute('data-uploader-label') || '';
+        var url = target.getAttribute('data-uploader-url') || '';
+        var badgeText = target.getAttribute('data-uploader-badge') || '';
+        var medalsHtml = target.getAttribute('data-uploader-medals') || '';
+        var accent = target.getAttribute('data-uploader-accent') || '';
+        var metaPrimaryText = target.getAttribute('data-uploader-meta-primary') || '';
+        var avatarClass = target.getAttribute('data-uploader-ring') || 'torrent-uploader-preview__avatar--default';
+        var avatarSrc = target.getAttribute('data-uploader-avatar') || target.getAttribute('data-uploader-fallback') || '<?php echo get_default_avatar_path(); ?>';
+        var fallback = target.getAttribute('data-uploader-fallback') || '<?php echo get_default_avatar_path(); ?>';
+
+        avatar.style.display = '';
+        avatar.className = 'torrent-uploader-preview__avatar ' + avatarClass;
+        image.alt = label;
+        image.onerror = function () {
+            this.onerror = null;
+            this.src = fallback;
+        };
+        image.src = avatarSrc;
+
+        name.className = 'torrent-uploader-preview__name';
+        setAccentedText(name, label, accent);
+        if (url) {
+            name.setAttribute('href', url);
+            name.removeAttribute('tabindex');
+            name.removeAttribute('aria-disabled');
+            name.style.pointerEvents = '';
+            name.style.cursor = '';
+        } else {
+            name.removeAttribute('href');
+            name.setAttribute('tabindex', '-1');
+            name.setAttribute('aria-disabled', 'true');
+            name.style.pointerEvents = 'none';
+            name.style.cursor = 'default';
+        }
+
+        badge.className = 'torrent-uploader-preview__badge';
+        if (badgeText) {
+            setAccentedText(badge, badgeText, accent);
+            badge.style.display = '';
+        } else {
+            while (badge.firstChild) {
+                badge.removeChild(badge.firstChild);
+            }
+            badge.style.display = 'none';
+        }
+
+        medals.innerHTML = medalsHtml;
+        medals.style.display = medalsHtml ? '' : 'none';
+
+        aside.style.display = '';
+        setStats(stats, target.getAttribute('data-uploader-stats') || '[]');
+        setActions(actions, target.getAttribute('data-uploader-actions') || '[]');
+        setText(metaPrimary, metaPrimaryText);
+    }
+
+    function positionPreview() {
+        if (!active) return;
+        var rect = active.getBoundingClientRect();
+        var vw = window.innerWidth || document.documentElement.clientWidth;
+        var vh = window.innerHeight || document.documentElement.clientHeight;
+        var width = preview.offsetWidth || 352;
+        var height = preview.offsetHeight || 142;
+        var gap = 10;
+
+        var left = rect.left + (rect.width / 2) - (width / 2);
+        if (left < 12) left = 12;
+        if (left + width > vw - 12) left = Math.max(12, vw - width - 12);
+
+        var top;
+        var placement = 'above';
+        if (rect.top >= height + gap + 12) {
+            top = rect.top - height - gap;
+            placement = 'above';
+        } else {
+            top = rect.bottom + gap;
+            placement = 'below';
+            if (top + height > vh - 12) {
+                top = Math.max(12, rect.top - height - gap);
+                placement = 'above';
+            }
+        }
+
+        preview.classList.toggle('is-above', placement === 'above');
+        preview.classList.toggle('is-below', placement === 'below');
+        preview.style.left = left + 'px';
+        preview.style.top = top + 'px';
+    }
+
+    function hidePreview() {
+        clearHideTimer();
+        clearShowTimer();
+        active = null;
+        preview.setAttribute('aria-hidden', 'true');
+        preview.classList.remove('is-visible', 'is-above', 'is-below', 'is-measuring');
+    }
+
+    function showPreview(target) {
+        clearHideTimer();
+        active = target;
+        populatePreview(target);
+        preview.setAttribute('aria-hidden', 'false');
+        preview.classList.add('is-visible', 'is-measuring');
+        positionPreview();
+        requestAnimationFrame(function () {
+            preview.classList.remove('is-measuring');
+            positionPreview();
+        });
+    }
+
+    document.addEventListener('mouseenter', function (ev) {
+        var target = closestUploader(ev.target);
+        if (!target) return;
+        scheduleShow(target);
+    }, true);
+
+    document.addEventListener('mouseleave', function (ev) {
+        var target = closestUploader(ev.target);
+        if (!target) return;
+        if (closestUploader(ev.relatedTarget) === target) return;
+        if (target === pendingTarget) clearShowTimer();
+        if (target === active) scheduleHide();
+    }, true);
+
+    preview.addEventListener('mouseenter', clearHideTimer);
+    preview.addEventListener('mouseleave', scheduleHide);
+    window.addEventListener('blur', hidePreview);
+    window.addEventListener('resize', function () {
+        if (active) positionPreview();
+    });
+    document.addEventListener('scroll', function () {
+        if (active) positionPreview();
+    }, true);
+})();
+</script><div class="site-quick-search-modal" id="site-quick-search-modal" aria-hidden="true"><div class="site-quick-search-modal__backdrop" data-site-quick-search-close="1"></div><div class="site-quick-search-modal__dialog" role="dialog" aria-modal="true" aria-label="快捷搜索种子"><form class="site-quick-search site-quick-search--modal site-quick-search--hot-focus" method="get" action="torrents.php" role="search" data-site-quick-search-form="1" onsubmit="var q=this.elements['search']; q.value=q.value.replace(/^\s+|\s+$/g, ''); return q.value !== '';"><input type="hidden" name="search_area" value="0" /><input type="hidden" name="search_mode" value="0" /><label class="site-quick-search__wrap"><button type="submit" class="site-quick-search__submit" aria-label="搜索种子" title="搜索种子"><i class="fas fa-search" aria-hidden="true"></i></button><input class="site-quick-search__input" type="text" name="search" autocomplete="off" aria-label="搜索种子" placeholder="搜索种子" /></label><div class="site-quick-search__hot" aria-label="热门搜索"><div class="site-quick-search__hot-links"><a href="torrents.php?search=%E5%8A%9F%E5%A4%AB%E5%A5%B3%E8%B6%B3&amp;notnewword=1" onpointerdown="event.preventDefault()">功夫女足</a>
+<a href="torrents.php?search=%E5%85%B0%E9%A6%99%E5%A6%82%E6%95%85&amp;notnewword=1" onpointerdown="event.preventDefault()">兰香如故</a>
+<a href="torrents.php?search=AudiesCC&amp;notnewword=1" onpointerdown="event.preventDefault()">AudiesCC</a>
+<a href="torrents.php?search=%E4%BB%99%E9%80%86&amp;notnewword=1" onpointerdown="event.preventDefault()">仙逆</a>
+<a href="torrents.php?search=%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0&amp;notnewword=1" onpointerdown="event.preventDefault()">凡人修仙传</a>
+<a href="torrents.php?search=%E6%88%91%E4%B8%8D%E6%98%AF%E5%A4%A7%E5%B8%88&amp;notnewword=1" onpointerdown="event.preventDefault()">我不是大师</a>
+<a href="torrents.php?search=%E7%8E%B0%E5%9C%A8%E5%B0%B1%E5%87%BA%E5%8F%91&amp;notnewword=1" onpointerdown="event.preventDefault()">现在就出发</a>
+<a href="torrents.php?search=%E6%97%A0%E5%8F%AF%E6%9B%BF%E4%BB%A3&amp;notnewword=1" onpointerdown="event.preventDefault()">无可替代</a>
+<a href="torrents.php?search=%E6%96%97%E7%A0%B4%E8%8B%8D%E7%A9%B9&amp;notnewword=1" onpointerdown="event.preventDefault()">斗破苍穹</a>
+<a href="torrents.php?search=%E7%89%A7%E7%A5%9E%E8%AE%B0&amp;notnewword=1" onpointerdown="event.preventDefault()">牧神记</a>
+<a href="torrents.php?search=%E4%BD%99%E7%BA%A2%E6%97%A7%E4%BA%8B&amp;notnewword=1" onpointerdown="event.preventDefault()">余红旧事</a>
+<a href="torrents.php?search=%E7%BC%8E%E5%B8%A6%E8%8B%B1%E9%9B%84&amp;notnewword=1" onpointerdown="event.preventDefault()">缎带英雄</a>
+<a href="torrents.php?search=%E6%B2%A7%E5%85%83%E5%9B%BE&amp;notnewword=1" onpointerdown="event.preventDefault()">沧元图</a>
+<a href="torrents.php?search=%E9%AD%85%E5%BD%B1%E7%A5%9E%E6%8D%95&amp;notnewword=1" onpointerdown="event.preventDefault()">魅影神捕</a>
+<a href="torrents.php?search=%E5%AE%8C%E7%BE%8E%E4%B8%96%E7%95%8C&amp;notnewword=1" onpointerdown="event.preventDefault()">完美世界</a>
+</div></div></form></div></div><script>(function(){var shortcut="Ctrl+Q";var modal=document.getElementById("site-quick-search-modal");if(!modal)return;var input=modal.querySelector(".site-quick-search__input");function isTypingTarget(el){return el&&(el.tagName==="INPUT"||el.tagName==="TEXTAREA"||el.tagName==="SELECT"||el.isContentEditable);}function openModal(){modal.classList.add("is-open");modal.setAttribute("aria-hidden","false");setTimeout(function(){if(input){input.focus();input.select();}},0);}function closeModal(){modal.classList.remove("is-open");modal.setAttribute("aria-hidden","true");if(input){input.blur();}}function parseShortcut(value){var parts=String(value||"Ctrl+Q").split("+");var key=parts.pop()||"Q";var mods={ctrl:false,alt:false,shift:false,meta:false};parts.forEach(function(part){part=part.toLowerCase();if(part==="ctrl"||part==="control")mods.ctrl=true;else if(part==="alt"||part==="option")mods.alt=true;else if(part==="shift")mods.shift=true;else if(part==="meta"||part==="cmd"||part==="command"||part==="win")mods.meta=true;});return{key:key,mods:mods};}var parsed=parseShortcut(shortcut);function shortcutMatches(e){var key=e.key||"";var want=parsed.key;if(want.length===1){key=key.toLowerCase();want=want.toLowerCase();}return key===want&&!!e.ctrlKey===parsed.mods.ctrl&&!!e.altKey===parsed.mods.alt&&!!e.shiftKey===parsed.mods.shift&&!!e.metaKey===parsed.mods.meta;}document.addEventListener("keydown",function(e){if((e.key||"")==="Escape"&&modal.classList.contains("is-open")){e.preventDefault();closeModal();return;}if(isTypingTarget(e.target))return;if(shortcutMatches(e)){e.preventDefault();openModal();}},true);modal.addEventListener("click",function(e){if(e.target&&e.target.getAttribute("data-site-quick-search-close"))closeModal();});})();</script></div></body></html>
