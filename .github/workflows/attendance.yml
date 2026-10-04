@@ -95,9 +95,7 @@ jobs:
     # 自检回路：库上没有 API token 可读日志，所以把洗过的日志推到 checkin-evidence 分支，
     # 改代码那边 git fetch 就能看到这一轮到底走到哪一步。只推白名单行，页面原文不进仓库。
     #
-    # 上一版只走 git push，结果 exit 128 而错误信息跟着 job 一起烂在日志里（我读不到）。
-    # 现在 git 那趟改成「非致命 + 把 stderr 洗一遍附进证据」，真正的上传走 Contents API，
-    # 单条 PUT，不碰 clone/commit/push 这一串。
+    # 只走 Contents API：git push 那趟在 runner 里 exit 128 过一整轮，错误跟着 job 一起烂掉。
     - name: Push sanitized run log to checkin-evidence
       if: always()
       env:
@@ -111,24 +109,6 @@ jobs:
           echo "- commit ${GITHUB_SHA:0:7} | run $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT | $GITHUB_EVENT_NAME"
           echo "- 结束(UTC) $(date -u '+%F %T')"
         } >> checkin-evidence.md
-
-        REPO="https://github.com/${GITHUB_REPOSITORY}.git"
-        HDR="http.extraHeader=AUTHORIZATION: bearer ${GH_TOKEN}"   # token 不进 URL
-        rm -rf ev
-        ( git -c "$HDR" clone -q --depth 1 -b checkin-evidence "$REPO" ev \
-          && cp checkin-evidence.md ev/ && cd ev \
-          && git -c "$HDR" -c user.name=github-actions -c user.email=actions@github.com add -f checkin-evidence.md \
-          && git -c "$HDR" -c user.name=github-actions -c user.email=actions@github.com commit -q -m "check-in evidence run ${GITHUB_RUN_ID}" \
-          && git -c "$HDR" push -q origin HEAD:checkin-evidence \
-          && echo "✅ git 渠道成功" ) > git.try 2>&1 || echo "git 渠道失败，exit=$?" >> git.try
-        # 把 git 渠道的过程也洗一遍附在证据里（上一轮就是烂在这里、我读不到原因）：
-        # 每行加 📡 前缀，好让它过得了白名单；长串/IP 由同一个 sanitize_log 打码。
-        echo "## git 渠道" > git.raw
-        sed "s/^/📡 /" git.try >> git.raw
-        echo "" >> git.raw
-        python3 attendance_checkin.py --sanitize-log git.raw >> checkin-evidence.md 2>/dev/null || true
-        tail -3 git.try
-
         python3 - <<'PY'
         # Contents API：一次 PUT 覆盖 checkin-evidence 分支上的证据文件
         import base64, json, os, urllib.error, urllib.request
