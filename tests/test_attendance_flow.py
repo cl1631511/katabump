@@ -188,9 +188,22 @@ class FakeSB:
             return None
         # 分发按各脚本的独有串，顺序即特异性顺序（几条脚本都含 innerText / cf-turnstile-response）
         if "/*signals*/" in js: return self._signals()   # _PAGE_SIGNALS_JS
-        if "/*outer*/" in js:                            # _TS_OUTER_JS
-            if not self._cur()[2]:
+        if "/*diag*/" in js:                              # _TS_DIAG_JS
+            card = self._cur()[2]
+            return {"ifr": 2 if card else 0, "cfifr": 1 if card else 0,
+                    "shroot": 3, "shifr": 0, "cfres": 4, "api": 1,
+                    "wid": "760,230 300x65" if card else "no", "tok": 0}
+        if "/*container*/" in js:                         # _TS_CONTAINER_JS
+            # outer 抓不到 iframe 时靠容器矩形落点，所以两者要能各自独立失败
+            if not self._cur()[2] or not self.state.get("container_ok", True):
                 return None
+            return {"x": 760, "y": 230, "w": 300, "h": 65}
+        if "/*outer*/" in js:                             # _TS_OUTER_JS
+            if not self._cur()[2] or not self.state.get("outer_ok", True):
+                return None
+            if self.state.get("outer_shadow"):
+                # CF 的 widget iframe 挂在 open shadow root 里：看得见矩形、切不进去
+                return {"idx": -2, "shadow": 1, "box": {"x": 700, "y": 300, "w": 300, "h": 65}}
             return {"idx": 0, "box": {"x": 500, "y": 200, "w": 300, "h": 65}}
         if "/*inner*/" in js:                            # _TS_INNER_JS
             if not self.state.get("in_frame"):
@@ -202,6 +215,12 @@ class FakeSB:
             if self.state.get("solve_ok"):
                 self.state["token"] = TOKEN
             return "shadow-clicked"
+        if "/*execute*/" in js:                          # _TS_EXECUTE_JS
+            if not self.state.get("api", True):
+                return "no-api"
+            if self.state.get("solve_ok"):
+                self.state["token"] = TOKEN
+            return "executed"
         if "no-token" in js:                             # _SUBMIT_JS
             self.state["key"] = self.state["after_key"]
             self.state["submitted"] = True
@@ -238,7 +257,8 @@ class FakeSB:
 def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
              attend_key="attend_pre", logged_in=True, token=TOKEN, solve_ok=True,
              pairs=None, submit_ret="submitted", nav_fails=0,
-             cdp_ok=True, page_cookie_ok=True, signals=None):
+             cdp_ok=True, page_cookie_ok=True, signals=None,
+             outer_ok=True, container_ok=True, outer_shadow=False):
     login_url = site.home.replace("index.php", "login.php")
     routes = {
         "home": (site.home, "x" * 300, False),
@@ -252,6 +272,9 @@ def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
              "page_cookie_ok": page_cookie_ok, "submitted": False,
              # True = 这一下点击真能换来 token（CF 签发）；False = 点了也没用
              "solve_ok": solve_ok,
+             # CI 里真实出现过的形状：顶层抓不到 CF iframe，只有 widget 容器
+             "outer_ok": outer_ok, "container_ok": container_ok,
+             "outer_shadow": outer_shadow,
              # None = 由当前页的 card 标志推导；给了就覆盖「提交前」那页（构造特殊页面）
              "signals": signals}
     captured = {}
@@ -384,9 +407,39 @@ ok(released and (released[0][2], released[0][3]) == (540, 238),
 st, detail, sb = run_case(SITE_A, A_PRE, token="", solve_ok=False)
 released = [t for t in sb.timeline if t[0] == "mouse" and t[1] == "mouseReleased"]
 ok(st == aud.CHK_VERIFY_FAIL and len(released) == 1,
-   f"A14c 点了还没 token -> 最多两次就收手报 VERIFY_FAIL（{len(released)} 次，{detail}）")
+   f"A14c 点了还没 token -> 最多三招就收手报 VERIFY_FAIL（{len(released)} 次，{detail}）")
 ok(len([t for t in sb.timeline if t[0] == "frame_in"]) >= 1,
    "A14d 第二次尝试是切进 iframe 穿透 shadow DOM 点 checkbox")
+
+# CI 实测形状：CF组件=1 但顶层 document 里没有 challenges.cloudflare.com 的 iframe，
+# _TS_OUTER_JS 返回 null -> 上一版直接放弃点击。现在退而点 widget 容器。
+st, detail, sb = run_case(SITE_A, A_PRE, token="", outer_ok=False,
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+rel = [t for t in sb.timeline if t[0] == "mouse" and t[1] == "mouseReleased"]
+ok(st == aud.CHK_PASS and len(rel) == 1 and (rel[0][2], rel[0][3]) == (794, 262),
+   f"A14e 顶层没有 CF iframe -> 改点容器矩形中心偏左（{rel and rel[0][2:]}，{detail}）")
+
+# 前两招都摸不到东西时，站点自己引的 turnstile API 还能重跑一次 widget
+st, detail, sb = run_case(SITE_A, A_PRE, token="", outer_ok=False, container_ok=False,
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+rel = [t for t in sb.timeline if t[0] == "mouse" and t[1] == "mouseReleased"]
+ok(st == aud.CHK_PASS and not rel,
+   f"A14h 坐标点不着、shadow 也没有 -> turnstile.execute() 拿到 token（{detail}）")
+
+st, detail, sb = run_case(SITE_A, A_PRE, token="", solve_ok=False,
+                          outer_ok=False, container_ok=False)
+rel = [t for t in sb.timeline if t[0] == "mouse" and t[1] == "mouseReleased"]
+ok(st == aud.CHK_VERIFY_FAIL and not rel,
+   f"A14f iframe 与容器都读不到 -> 一次鼠标事件都不发，两次尝试后报红（{detail}）")
+
+
+st, detail, sb = run_case(SITE_A, A_PRE, token="", outer_shadow=True,
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+rel = [t for t in sb.timeline if t[0] == "mouse" and t[1] == "mouseReleased"]
+ok(st == aud.CHK_PASS and len(rel) == 1 and (rel[0][2], rel[0][3]) == (734, 332),
+   f"A14g widget 在 shadow root 里：量得到矩形就按它点，不去切 frame（{rel and rel[0][2:]}）")
+ok(not [t for t in sb.timeline if t[0] == "frame_in"],
+   "A14g2 影子里的 iframe 切不进去，代码不能去切")
 
 
 # ===== mua（有「立即签到」按钮）=====

@@ -287,15 +287,34 @@ _TS_OUTER_JS = """
 return /*outer*/ (function(){
     function box(el){ var r = el.getBoundingClientRect();
         return {x: r.left, y: r.top, w: r.width, h: r.height}; }
+    function iscf(el){
+        var s = el.getAttribute ? (el.getAttribute('src') || '') : '';
+        var c = el.className || '', id = el.id || '';
+        return s.indexOf('challenges.cloudflare.com') > -1 || s.indexOf('/turnstile/') > -1 ||
+               c.indexOf('turnstile') > -1 || id.indexOf('turnstile') > -1;
+    }
     var fr = document.querySelectorAll('iframe');
     for (var i = 0; i < fr.length; i++) {
-        var s = fr[i].src || '', c = fr[i].className || '', id = fr[i].id || '';
-        if (s.indexOf('challenges.cloudflare.com') > -1 || s.indexOf('/turnstile/') > -1 ||
-            c.indexOf('turnstile') > -1 || id.indexOf('turnstile') > -1) {
+        if (iscf(fr[i])) {
             fr[i].setAttribute('data-ts', String(i));
             return {idx: i, box: box(fr[i])};
         }
     }
+    // document.querySelectorAll 看不见 shadow root 里的 iframe —— CF 的 widget 恰好挂在那里，
+    // 上一轮「CF组件=1 却读不到矩形」就是漏在这一层。影子里的 iframe 切换不进去（跨域 + 够不着），
+    // 但矩形照样能量，坐标点击不需要切 frame。
+    var hit = null;
+    function walk(root, depth){
+        if (hit || depth > 4) return;
+        var els;
+        try { els = root.querySelectorAll('*'); } catch (e) { return; }
+        for (var k = 0; k < els.length && !hit; k++) {
+            if (els[k].tagName === 'IFRAME') { if (iscf(els[k])) hit = els[k]; }
+            else if (els[k].shadowRoot) walk(els[k].shadowRoot, depth + 1);
+        }
+    }
+    walk(document, 0);
+    if (hit) return {idx: -2, shadow: 1, box: box(hit)};
     var q = document.querySelector('.cf-turnstile iframe, [class*="cf-turnstile"] iframe, ' +
                                    '[id*="turnstile"] iframe');
     if (q) { q.setAttribute('data-ts', 'q'); return {idx: -1, box: box(q)}; }
@@ -333,6 +352,91 @@ return /*shadow*/ (function(){
 """
 
 
+# 上一轮 CI 的真实卡点：页面特征里 CF组件=1、Turnstile=1，但顶层 document 里抓不到
+# challenges.cloudflare.com 的 iframe —— widget 是 <div class="cf-turnstile">，真正的
+# iframe 由脚本渲染，可能落在 open shadow root 里，也可能还没渲染。所以先量结构再动手。
+_TS_DIAG_JS = """
+return /*diag*/ (function(){
+    var out = {ifr: 0, cfifr: 0, shroot: 0, shifr: 0, cfres: -1, api: 0, wid: 'no', tok: -1};
+    var fs = document.querySelectorAll('iframe');
+    out.ifr = fs.length;
+    for (var i = 0; i < fs.length; i++) {
+        var s = fs[i].getAttribute('src') || fs[i].src || '';
+        if (s.indexOf('challenges.cloudflare.com') > -1 || s.indexOf('/turnstile/') > -1) out.cfifr++;
+    }
+    function walk(root, depth){
+        if (depth > 4) return;
+        var els;
+        try { els = root.querySelectorAll('*'); } catch (e) { return; }
+        for (var i = 0; i < els.length; i++) {
+            var e = els[i];
+            if (e.tagName === 'IFRAME') {
+                var s2 = e.getAttribute('src') || '';
+                if (s2.indexOf('challenges.cloudflare.com') > -1) out.shifr++;
+            }
+            if (e.shadowRoot) { out.shroot++; walk(e.shadowRoot, depth + 1); }
+        }
+    }
+    walk(document, 0);
+    try {
+        var res = performance.getEntriesByType('resource');
+        out.cfres = 0;
+        for (var k = 0; k < res.length; k++) {
+            if ((res[k].name || '').indexOf('challenges.cloudflare.com') > -1) out.cfres++;
+        }
+    } catch (e) {}
+    out.api = (window.turnstile && (window.turnstile.render || window.turnstile.execute)) ? 1 : 0;
+    var w = document.querySelector('.cf-turnstile, [data-sitekey]');
+    if (w) {
+        var r = w.getBoundingClientRect();
+        out.wid = (r.width > 0 && r.height > 0) ? (Math.round(r.left) + ',' + Math.round(r.top) +
+                 ' ' + Math.round(r.width) + 'x' + Math.round(r.height)) : 'zero';
+    }
+    var t = document.querySelector('input[name="cf-turnstile-response"]');
+    out.tok = t ? (t.value || '').length : -1;
+    return out;
+})()
+"""
+
+
+def _fmt_diag(d):
+    if not isinstance(d, dict):
+        return "探针没返回结构（execute_script 又坏了？）"
+    return (f"顶层iframe={d.get('ifr')} 其中CF={d.get('cfifr')} "
+            f"shadow根={d.get('shroot')} 影子内CFiframe={d.get('shifr')} "
+            f"CF资源条数={d.get('cfres')} turnstile对象={d.get('api')} "
+            f"容器={d.get('wid')} token长度={d.get('tok')}")
+
+
+def _diag_turnstile(sb):
+    try:
+        print(f"🔎 Turnstile 结构: {_fmt_diag(sb.driver.execute_script(_TS_DIAG_JS))}")
+    except Exception as e:
+        print(f"🔎 Turnstile 结构: 读取出错 {type(e).__name__}")
+
+
+_TS_CONTAINER_JS = """
+return /*container*/ (function(){
+    var w = document.querySelector('.cf-turnstile, [data-sitekey]');
+    if (!w) return null;
+    var r = w.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return null;
+    return {x: r.left, y: r.top, w: r.width, h: r.height};
+})()
+"""
+
+
+def _container_point(sb):
+    """外框 iframe 抓不到时的落点：直接点 widget 容器自己的矩形（圆圈在那一行的左侧）。"""
+    try:
+        c = sb.driver.execute_script(_TS_CONTAINER_JS)
+    except Exception:
+        return None
+    if not isinstance(c, dict) or not c.get("w"):
+        return None
+    return (c["x"] + min(34.0, max(1.0, c["w"] * 0.35)), c["y"] + c["h"] / 2.0)
+
+
 def _ts_point(sb):
     """Turnstile 复选框在顶层视口的 CSS 像素坐标；拿不到给 None。"""
     try:
@@ -340,9 +444,13 @@ def _ts_point(sb):
     except Exception:
         return None
     if not isinstance(top, dict) or not isinstance(top.get("box"), dict):
-        return None
+        return _container_point(sb)
     b = top["box"]
     inner = None
+    if top.get("shadow"):
+        # 影子里的 iframe 切不进去（Selenium 够不着 shadow root，而且它跨域），
+        # 但这个矩形本身就是那个 widget —— 直接按外框落点，不再读内层
+        return (b["x"] + min(34.0, max(1.0, b["w"] * 0.35)), b["y"] + b["h"] / 2.0)
     try:
         els = sb.driver.find_elements("css selector", "iframe[data-ts]")
         if els:
@@ -378,12 +486,19 @@ def _click_turnstile(sb):
         # 先挪两下鼠标：CF 会看点击前有没有真实的指针移动
         for mv in ((cx - 12, cy - 7), (cx - 3, cy - 1)):
             core._cdp(sb, "Input.dispatchMouseEvent",
-                      {"type": "mouseMoved", "x": mv[0], "y": mv[1]})
+                      {"type": "mouseMoved", "x": mv[0], "y": mv[1],
+                       "pointerType": "mouse", "buttons": 0})
             time.sleep(0.05)
-        for t in ("mousePressed", "mouseReleased"):
-            core._cdp(sb, "Input.dispatchMouseEvent",
-                      {"type": t, "x": cx, "y": cy, "button": "left", "clickCount": 1})
-            time.sleep(0.06)
+        # mousePressed 不给 buttons=1、mouseReleased 不给 buttons=0，页面看到的是
+        # 「没有按键被按下」的移动，CF 的行为检测直接忽略这一下
+        core._cdp(sb, "Input.dispatchMouseEvent",
+                  {"type": "mousePressed", "x": cx, "y": cy, "button": "left",
+                   "clickCount": 1, "buttons": 1, "pointerType": "mouse"})
+        time.sleep(0.06)
+        core._cdp(sb, "Input.dispatchMouseEvent",
+                  {"type": "mouseReleased", "x": cx, "y": cy, "button": "left",
+                   "clickCount": 1, "buttons": 0, "pointerType": "mouse"})
+        time.sleep(0.06)
         return True
     except Exception as e:
         print(f"  ⚠️ [CDP] 点击没发出去: {type(e).__name__}")
@@ -425,6 +540,30 @@ def _wait_token(sb, secs, label=""):
     return ""
 
 
+# 第三招：站点自己引了 turnstile JS API，就直接调它的 execute() 让 widget 重跑一次。
+# 这是官方接口，签发由 widget 自己做，不涉及「伪造点击」。
+_TS_EXECUTE_JS = """
+return /*execute*/ (function(){
+    try {
+        if (!window.turnstile || !window.turnstile.execute) return 'no-api';
+        var w = document.querySelector('.cf-turnstile, [data-sitekey]');
+        if (w) window.turnstile.execute(w); else window.turnstile.execute();
+        return 'executed';
+    } catch (e) { return 'err:' + (e && e.name ? e.name : '?'); }
+})()
+"""
+
+
+def _api_execute(sb):
+    try:
+        r = sb.driver.execute_script(_TS_EXECUTE_JS)
+    except Exception as e:
+        print(f"  ⚠️ turnstile.execute 调用异常: {type(e).__name__}")
+        return False
+    print(f"🧩 [API] turnstile.execute -> {r}")
+    return r == "executed"
+
+
 def _solve_turnstile(sb):
     """拿 token：先等站点静默签发，等不到就自己点（坐标点一次、shadow 点一次）。
 
@@ -435,17 +574,26 @@ def _solve_turnstile(sb):
     tok = _wait_token(sb, 6, "（静默签发）")
     if tok:
         return tok
-    for attempt in (1, 2):
+    _diag_turnstile(sb)
+    tried = 0
+    for attempt in (1, 2, 3):
         sig = _page_signals(sb)
         if not (sig and (sig["widget"] or sig["cf"])):
             print("⚠️ 页面上没有 Turnstile 组件、也没签发 token —— 不做点击尝试")
             return None
         print(f"🧩 第 {attempt} 次尝试过验证...")
-        (_click_turnstile if attempt == 1 else _shadow_click)(sb)
-        tok = _wait_token(sb, 12, f"（第 {attempt} 次点击后）")
+        tried += 1
+        if attempt == 1:
+            _click_turnstile(sb)
+        elif attempt == 2:
+            _shadow_click(sb)
+        else:
+            _api_execute(sb)
+        tok = _wait_token(sb, 12, f"（第 {attempt} 次尝试后）")
         if tok:
             return tok
-    print("❌ 点过两次仍没有 token")
+    _diag_turnstile(sb)
+    print(f"❌ 试过 {tried} 招仍没有 token")
     return ""
 
 
