@@ -15,6 +15,11 @@ import os
 import re
 import sys
 import types
+
+# Windows 控制台默认 gbk，测试里那些 emoji/CJK 断言会直接把 print 炸掉（和代码无关，纯粹是这台机器的
+# 编码）。CI 上是 UTF-8 所以只有本地裸跑会红 —— 自己把 stdout 收成 utf-8，失败才有意义。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from pathlib import Path
 
 os.environ.setdefault("USERS_JSON", "[]")

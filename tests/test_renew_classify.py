@@ -9,6 +9,10 @@ import json
 import sys
 import types
 
+# Windows 控制台默认 gbk，app.py 顶层那些 ❌/中文 print 会炸掉裸跑（CI 上是 UTF-8，不受影响）。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 # ---- 打桩 app.py 顶层重型依赖（仅测纯函数，不需要真 Selenium/requests）----
 req = types.ModuleType("requests")
 req.Session = object

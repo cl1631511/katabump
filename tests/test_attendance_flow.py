@@ -16,6 +16,10 @@ import re
 import sys
 import tempfile
 import types
+
+# Windows 控制台默认 gbk，测试里的 CJK/emoji 会炸 print（与代码无关）。CI 是 UTF-8，只有本地裸跑会红。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from pathlib import Path
 
 os.environ.setdefault("USERS_JSON", "[]")
