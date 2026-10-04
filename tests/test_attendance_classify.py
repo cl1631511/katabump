@@ -264,4 +264,24 @@ finally:
     aud.run_site = _real_run_site
 ok(len(GETS) == 1, "B18 全员已签到那一轮照样推一条（收到=今天没漏，没收到=该查）")
 
+# ── 10. 续期每轮汇总：一条消息盖所有账号，且不顶着一个账号名 ────────────────
+GETS.clear()
+app_mod.CURRENT_EMAIL = "some_user_9527@example.com"
+app_mod.push_notice("✅", "本轮跑完：1 个都在冷却期，无需续期",
+                    "⏳ so****27@example.com 冷却期内无需续（剩 12 天）", account="")
+sent = urllib.parse.unquote(GETS[0][0])
+ok("👤" not in sent, "B19 account=\"\" 的汇总消息不带头部账号行（CURRENT_EMAIL 是最后一个账号，挂上去就是误导）")
+ok("some_user_9527@example.com" not in sent, "B20 汇总正文同样只有掩码形状")
+GETS.clear()
+app_mod.push_notice("✅", "续期成功", "到期 2026-11-04")
+ok("👤 so****27@example.com" in urllib.parse.unquote(GETS[0][0]),
+   "B21 不传 account 时仍按当前账号出头（单账号消息没变样）")
+# 汇总行是拿 _alert_action 的 text 拼的，而它对「不单独告警」那两种状态返回空串 ——
+# 空串进汇总就成了「⏳ ab****cd@x.com （剩 12 天）」这种读不出来的话，所以必须有兜底文案
+_Quiet = {app_mod.RENEW_COOLDOWN, app_mod.RENEW_UNCONFIRMED}
+ok(_Quiet <= set(app_mod._QUIET_TEXT), "B22 静默状态在汇总里都有人话（_QUIET_TEXT 覆盖全）")
+for _st in (app_mod.RENEW_COOLDOWN, app_mod.RENEW_UNCONFIRMED):
+    ok(app_mod._alert_action(_st, 12)[1] == "" and app_mod._QUIET_TEXT[_st],
+       f"B23 {_st} 不单独告警但汇总有词：{app_mod._QUIET_TEXT[_st]}")
+
 print("\nALL OK")

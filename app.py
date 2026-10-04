@@ -160,11 +160,14 @@ def send_bark(title, body, critical=False):
     return False
 
 
-def push_notice(status_icon, status_text, detail="", critical=False, account=""):
-    """续期流程的出口：Bark 优先，退回 TG。正文只有状态、脱敏账户和时间。"""
+def push_notice(status_icon, status_text, detail="", critical=False, account=None):
+    """续期流程的出口：Bark 优先，退回 TG。正文只有状态、脱敏账户和时间。
+
+    account 传 "" 表示「这不是单账号的消息」（每轮汇总那条），就不该顶着一个账号。
+    """
     if BARK_KEY:
         ts = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 8 * 3600))
-        acct = account or CURRENT_EMAIL
+        acct = CURRENT_EMAIL if account is None else account
         body = "\n".join(x for x in ((f"👤 {mask_email(acct)}" if acct else ""),
                                      detail, f"⏱️ {ts}") if x)
         return send_bark(f"{status_icon} {status_text}", body, critical)
@@ -2075,6 +2078,11 @@ def _run_account(sb_kwargs, email, pwd):
 #  脚本执行入口 (可选代理)
 
 
+# 每轮汇总里给「不单独告警」的那两种状态的人话（_alert_action 对它们只返回空串）
+_QUIET_TEXT = {RENEW_COOLDOWN: "冷却期内无需续",
+               RENEW_UNCONFIRMED: "未确认续上（暂不吵）"}
+
+
 def _alert_action(status, remaining_days):
     """告警决策纯函数（可单测）。返回 (icon, text, should_alert)。
     should_alert=True → 发 TG ❌ 且让 Actions 失败；False → 静默/低噪。
@@ -2127,6 +2135,7 @@ def main():
     renewed = 0
     cooldown = 0
     failed = 0
+    summary_lines = []   # 每轮结尾一条汇总推送的正文（照 PT-Checkin：一轮一条）
     pool_n = _pool_size()
     try:
         max_attempts = int(os.environ.get("NODE_ATTEMPTS", "0") or "0")
@@ -2136,10 +2145,12 @@ def main():
         max_attempts = min(5, pool_n) if pool_n else 1
 
     # ------------------------------------------------------------------
-    # 告警决策表（用户拍板：只有真问题才告警；能跑但暂时续不上/健康冷却期不吵）。
-    # ① RENEW_PASS        -> ✅ 发成功（低噪确认，非告警）。
-    # ② RENEW_SUSPENDED   -> 硬红告警 + Actions 失败；真死/需人工处理。
-    # ③ RENEW_COOLDOWN    -> 健康冷却，静默（不发 TG、不红 CI）。
+    # 告警决策表（用户拍板：只有真问题才单独告警；能跑但暂时续不上/健康冷却期不吵）。
+    # 2026-10-05 补充：不管结果如何，**每轮结尾必推一条汇总**（一轮一条，普通级别），
+    # 所以下面「静默」只等于「不单独发 critical」，不再等于「这轮你收不到东西」。
+    # ① RENEW_PASS        -> 不单独发，进汇总（低噪确认，非告警）。
+    # ② RENEW_SUSPENDED   -> 硬红告警（立刻发）+ Actions 失败；真死/需人工处理。
+    # ③ RENEW_COOLDOWN    -> 健康冷却，不单独发，进汇总；不红 CI。
     # ④ RENEW_UNCONFIRMED:
     #    - 剩 ≤2 天（临近到期没续上） -> 红告警 + 失败（真问题，需核对）。
     #    - 其余（无天数信息/冷却期）   -> 静默（服务器未必死，用户眼下处理不了，别吵；
@@ -2198,24 +2209,28 @@ def main():
                     break
                 # 未确认/失败：有池才换节点再试。
 
-        # ---------- 告警决策（见 _alert_action 注释表） ----------
+        # ---------- 告警决策（见 _alert_action 注释表）+ 每轮汇总的那一行 ----------
         icon, atext, should_alert = _alert_action(acc_res, acc_rdays)
         if acc_res == RENEW_PASS:
             renewed += 1
             print(f"✅ 账号 {email} 续期成功")
-            push_notice(icon, atext, acc_detail or "续期成功")
+            summary_lines.append(f"✅ {mask_email(email)} {atext}")
         elif should_alert:
             # 真·问题：suspended / 流程未跑通 / 临近到期未确认续上 → 红告警 + Actions 失败
             failed += 1
             extra = f"（剩 {acc_rdays} 天）" if acc_res == RENEW_UNCONFIRMED and acc_rdays is not None else ""
             print(f"❌ 账号 {email} {atext}{extra}（{acc_res}）：{acc_detail or ''}")
+            # 立刻发，不等汇总：这一轮后面还可能崩/挂，真问题不能跟着一起丢
             push_notice(icon, atext, f"{mask_email(email)} {acc_res} | {acc_detail}", critical=True)
+            summary_lines.append(f"❌ {mask_email(email)} {atext}{extra}")
         else:
             # 健康冷却期 / 无天数 unconfirmed：用户当下处理不了（到期日未知/未到），
-            # 且真死由 suspended 硬告警兜底 → 静默，仅记日志，不发 TG、不因 CI 失败。
+            # 且真死由 suspended 硬告警兜底 → 不单独告警，但进每轮汇总。
             cooldown += 1
             extra = f"剩 {acc_rdays} 天" if acc_rdays is not None else "天数未知"
             print(f"⏳ 账号 {email} 本次未触发告警（{acc_res}，{extra}）：{acc_detail or ''}")
+            summary_lines.append(f"⏳ {mask_email(email)} "
+                                 f"{_QUIET_TEXT.get(acc_res, acc_res)}（{extra}）")
 
     # 确保状态文件存在（即使冷却期未写入任何 expiry），供 actions/cache/save 有文件可存
     _ensure_state_file()
@@ -2223,6 +2238,16 @@ def main():
     print("\n" + "#" * 25)
     print(f"  处理完毕：续期成功 {renewed} / 无告警(冷却/未确认) {cooldown} / 需处理失败 {failed} / 共 {len(ACCOUNTS)}")
     print("#" * 25)
+    # 每轮都推一条汇总（他 2026-10-05 拍板，照 PT-Checkin 一轮一条）：
+    # 全冷却的日子以前一声不响，现在也要让他知道「跑过了、不用动」。
+    # 级别用普通 —— 真问题已经单独 critical 过，这条只是复盘，不重复吵。
+    if failed:
+        s_icon, s_text = "🔴", f"本轮跑完：{failed} 个需处理"
+    elif renewed:
+        s_icon, s_text = "✅", f"本轮跑完：续上 {renewed} 个"
+    else:
+        s_icon, s_text = "✅", f"本轮跑完：{len(ACCOUNTS)} 个都在冷却期，无需续期"
+    push_notice(s_icon, s_text, "\n".join(summary_lines) or "（没有账号）", account="")
     # 只有存在“真正需用户处理”的失败（需告警类型）才让 Actions 红灯
     if failed > 0:
         raise SystemExit(1)
