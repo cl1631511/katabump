@@ -142,10 +142,13 @@ def send_bark(title, body, critical=False):
     url = "/".join([BARK_URL.rstrip("/"), BARK_KEY,
                     urllib.parse.quote(str(title), safe=""),
                     urllib.parse.quote(str(body), safe="")])
-    params = {"sound": "alarm" if critical else "minuet",
+    params = {"sound": "minuet",
               "icon": "https://github.com/fluidicon.png",
               "group": "katabump",
               "level": "critical" if critical else "active"}
+    if critical:
+        # 照 PT-Checkin：critical 走系统级横幅（勿扰模式也弹），但不响铃 —— volume=0
+        params["volume"] = "0"
     try:
         r = requests.get(url, params=params, timeout=10)
         if r.status_code == 200:

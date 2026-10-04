@@ -206,7 +206,10 @@ ok(u == "/".join([app_mod.BARK_URL, "fakeDeviceKey",
                   urllib.parse.quote("正文\n两行", safe="")]),
    "B2 URL 形状 = {base}/{key}/{title}/{body}（PT-Checkin 同款）")
 ok(p["level"] == "critical" and p["group"] == "katabump", "B3 告警是 critical 级、同一分组")
-ok(app_mod.send_bark("t", "b") and GETS[-1][1]["level"] == "active", "B4 平时是 active 级（会响但不弹横幅遮挡）")
+ok(p["volume"] == "0" and p["sound"] == "minuet",
+   "B3b 告警 volume=0（和 PT-Checkin 一致：横幅照弹、勿扰也弹，但不额外响铃）")
+ok(app_mod.send_bark("t", "b") and GETS[-1][1]["level"] == "active", "B4 平时是 active 级")
+ok("volume" not in GETS[-1][1], "B4b 普通通知不带 volume（用系统默认音量）")
 
 # 账户身份：推送正文要经过 api.day.app，所以只允许掩码形状出现
 GETS.clear(), POSTS.clear()
