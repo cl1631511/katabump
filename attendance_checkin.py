@@ -289,19 +289,53 @@ def _navigate(sb, url, wait_s=25):
     return (sb.get_current_url() or ""), _body_text(sb)
 
 
+# CF 自己的凭证绑出口 IP + UA：把他浏览器里那份带到 CI 的出口，等于向 CF 证明同一凭证在
+# 两个 IP/UA 上反复出现，反而更容易卡在盾里 —— 一律不注入，让 CI 的浏览器自己过 CF。
 _CF_COOKIES = ("cf_clearance", "__cf_bm", "_cfuvid", "cfruid")
 
 
-def _inject_cookies(sb, pairs, site):
-    """逐条写入当前域的 cookie，返回真正落地的名字。
+def _injection_report(kind, landed, skipped, total):
+    """只印名字和计数：CDP/Selenium 的报错文本可能整段回显 cookie 值，CI 日志是公开的。"""
+    print(f"🍪 {kind}写入成功 {len(landed)}/{total - len(skipped)}: "
+          f"{', '.join(landed) or '无'}"
+          + (f"｜不注入 CF 凭证: {', '.join(skipped)}" if skipped else ""))
 
-    两件事是首跑之后加上的：
-    1. API 名字 —— SeleniumBase 的 BaseCase 只有 add_cookie(dict)，没有 set_cookie。
-       首跑（commit ba8e390）6 条全抛 AttributeError，站点看到的是游客，被 302 到 login.php，
-       日志却翻译成「cookie 已失效」，白指错方向。
-    2. CF 自己的凭证（cf_clearance 等）绑出口 IP + UA，把他浏览器里那份带到 CI 的出口，
-       等于给 CF 证明同一凭证在两个 IP/UA 反复出现，反而更容易卡在盾里 —— 一律不注入，
-       让 CI 的浏览器自己过 CF。
+
+def _cdp_set_cookie(sb, name, value, site):
+    """CDP 直接写 cookie 罐 —— 不要求先访问该域，所以第一枪就能带上登录态。
+
+    这是本函数存在的唯一理由：mua 那侧是「没有 cookie 就不给连」，先开首页再写 cookie
+    的走法等于自己把门关上；audiences 也会把无 cookie 的第一枪当游客，白等一轮 CF。
+    """
+    res = core._cdp(sb, "Network.setCookie", {
+        "name": name, "value": value, "domain": site.domain, "path": "/",
+        "secure": True, "httpOnly": True, "sameSite": "None"})
+    # setCookie 也可能不抛异常只回 success:false
+    return not (isinstance(res, dict) and res.get("success") is False)
+
+
+def _inject_cookies_cdp(sb, pairs, site):
+    landed, skipped = [], []
+    for name, value in pairs:
+        if name.lower() in _CF_COOKIES:
+            skipped.append(name)
+            continue
+        try:
+            if _cdp_set_cookie(sb, name, value, site):
+                landed.append(name)
+            else:
+                print(f"  ⚠️ cookie {name} CDP 拒绝（success=false）")
+        except Exception as e:
+            print(f"  ⚠️ cookie {name} CDP 写入失败: {type(e).__name__}")
+    _injection_report("首次请求前 ", landed, skipped, len(pairs))
+    return landed
+
+
+def _inject_cookies_page(sb, pairs, site):
+    """备用路径：Selenium 的 add_cookie 只能写「当前页面所属域」，所以必须先不带 cookie
+    开一次首页。对 mua 这种无 cookie 不连接的站没用，只在 CDP 整条不可用时兜底。
+    注意 API 名字 —— SeleniumBase 的 BaseCase 只有 add_cookie(dict)，没有 set_cookie；
+    首跑（commit ba8e390）就是叫错名字，6 条全抛 AttributeError 却被翻译成「cookie 已失效」。
     """
     landed, skipped = [], []
     for name, value in pairs:
@@ -313,10 +347,8 @@ def _inject_cookies(sb, pairs, site):
                            "domain": site.domain, "path": "/"})
             landed.append(name)
         except Exception as e:
-            # 只报异常类型：Selenium 的报错文本里可能整段回显 cookie 值（CI 日志是公开的）
             print(f"  ⚠️ cookie {name} 注入失败: {type(e).__name__}")
-    print(f"🍪 注入成功 {len(landed)}/{len(pairs) - len(skipped)}: {', '.join(landed) or '无'}"
-          + (f"｜不注入 CF 凭证: {', '.join(skipped)}" if skipped else ""))
+    _injection_report("首页建域后 ", landed, skipped, len(pairs))
     return landed
 
 
@@ -419,13 +451,13 @@ def checkin(sb_kwargs, site, pairs):
             except Exception:
                 pass
 
-            # 先建域再写 cookie：Selenium 只允许给当前页面所属域设 cookie
-            url, _ = _navigate(sb, site.home)
-            if _chrome_error(url):
-                url, _ = _navigate(sb, site.home)   # 同一节点上的偶发失败，再给一次机会
-            if _chrome_error(url):
-                return (CHK_UNKNOWN, f"首页 chrome-error（{_net_error(sb) or '出口不可用'}）")
-            landed = _inject_cookies(sb, pairs, site)
+            # cookie 先进罐，再发第一枪：mua 是「无 cookie 不给连」，先开首页等于自己关门。
+            landed = _inject_cookies_cdp(sb, pairs, site)
+            if not any(k in landed for k in _SESSION_KEYS):
+                # CDP 这条路整体不通（少见）才退回「先开首页建域再写」，本站首枪会不带 cookie
+                print("  ↩️ 退回首页建域再注入（首枪不带 cookie）")
+                _navigate(sb, site.home)
+                landed = _inject_cookies_page(sb, pairs, site)
             if not any(k in landed for k in _SESSION_KEYS):
                 return (CHK_UNKNOWN,
                         f"登录 cookie 没写进浏览器（落地: {', '.join(landed) or '无'}）"
@@ -433,10 +465,17 @@ def checkin(sb_kwargs, site, pairs):
 
             url, text = _navigate(sb, site.attend)
             if _chrome_error(url):
-                return (CHK_UNKNOWN, f"签到页 chrome-error（{_net_error(sb) or '出口不可用'}）")
+                url, text = _navigate(sb, site.attend)  # 同一节点上的偶发失败，再给一次机会
+            if _chrome_error(url):
+                return (CHK_UNKNOWN,
+                        f"签到页 chrome-error（{_net_error(sb) or '出口不可用'}）"
+                        f"；注入后罐里有 {', '.join(_jar_names(sb)) or '空'}")
             st = classify_attendance(text, url)
             if st == CHK_NO_SESSION:
-                return (CHK_NO_SESSION, "被重定向到登录页，cookie 已失效")
+                # 到这里 cookie 确定是带着发出去的了（首枪前已入罐），所以这是站点真的不认
+                return (CHK_NO_SESSION,
+                        "首枪即带 cookie 仍被重定向到登录页 —— 站点不认这串 cookie"
+                        f"（过期，或绑定原出口 IP/UA）；罐里有 {', '.join(_jar_names(sb)) or '空'}")
             try:
                 logged_in = bool(sb.execute_script(_LOGGED_IN_JS))
             except Exception:

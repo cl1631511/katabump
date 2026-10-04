@@ -2,7 +2,8 @@
 """签到全流程的假浏览器测试（不启动 Selenium），覆盖 audiences 与 mua 两种表单结构。
 
 重点验证三件事：
-  1. 正常链路：建域 → 注入 cookie → 打开签到页 → Turnstile 出 token → 提交 → 判成功；
+  1. 正常链路：注入 cookie → 打开签到页 → Turnstile 出 token → 提交 → 判成功
+     （第一枪就必须带着 cookie：mua 无 cookie 直接拒连）；
   2. 防假绿：提交后页面仍是未签到快照（验证入口还在）时，绝不返回 PASS；
   3. 两站差异：audiences 无按钮走 form.submit()，mua 必须点「立即签到」按钮。
 
@@ -64,13 +65,32 @@ TOKEN = "x" * 60
 FILL = "\n" + "填充" * 120
 
 
+class FakeDriver:
+    """真 BaseCase 一定带 .driver（WebDriver），app._cdp 走 driver.execute_cdp_cmd 这条分支。"""
+
+    def __init__(self, sb):
+        self.sb = sb
+
+    def execute_cdp_cmd(self, cmd, params):
+        return self.sb._cdp(cmd, params)
+
+    def execute_script(self, js, *args):
+        return self.sb.execute_script(js)
+
+
 class FakeSB:
-    """按 state['key'] 走剧本；执行 _SUBMIT_JS 时翻到 after_key。"""
+    """按 state['key'] 走剧本；执行 _SUBMIT_JS 时翻到 after_key。
+
+    timeline 记录「写 cookie」和「导航」的先后，因为本流程的关键约束就是
+    cookie 必须在第一次请求之前进罐（mua 无 cookie 不给连）。
+    """
 
     def __init__(self, routes, nav_map, state):
         self.routes, self.nav_map, self.state = routes, nav_map, state
         self.cookies = []
         self.shots = []
+        self.timeline = []
+        self.driver = FakeDriver(self)
 
     def __enter__(self): return self
     def __exit__(self, *a): return False
@@ -80,10 +100,21 @@ class FakeSB:
     def get_title(self): return "签到 - Powered by NexusPHP"
     def save_screenshot(self, name): self.shots.append(name)
 
+    def _cdp(self, cmd, params):
+        # 只认代码真会发的命令；冒出别的说明调用点和测试没对上
+        if cmd != "Network.setCookie":
+            raise AssertionError(f"假浏览器没认出的 CDP 命令: {cmd}")
+        if not self.state.get("cdp_ok", True):
+            raise RuntimeError("DevToolsActivePort file doesn't exist")
+        self.timeline.append(("set_cookie", params["name"]))
+        self.cookies.append((params["name"], params["domain"]))
+        return {"success": True}
+
     def uc_open_with_reconnect(self, url, reconnect_time=6):
+        self.timeline.append(("nav", url.split("?")[0]))
         k = self.nav_map.get(url.split("?")[0], "home")
-        if k == "home" and self.state.get("home_fails", 0) > 0:
-            self.state["home_fails"] -= 1
+        if self.state.get("nav_fails", 0) > 0:
+            self.state["nav_fails"] -= 1
             self.state["err_page"] = True
         else:
             self.state["err_page"] = False
@@ -91,8 +122,9 @@ class FakeSB:
 
     def add_cookie(self, cookie_dict, expiry=False):
         # 名字与 SeleniumBase 真实 API 一致；写成 set_cookie 就是首跑那个 bug
-        if not self.state.get("accept_cookies", True):
+        if not self.state.get("page_cookie_ok", True):
             raise AttributeError("'BaseCase' object has no attribute 'set_cookie'")
+        self.timeline.append(("add_cookie", cookie_dict["name"]))
         self.cookies.append((cookie_dict["name"], cookie_dict["domain"]))
 
     def get_cookies(self):
@@ -121,7 +153,8 @@ class FakeSB:
 
 def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
              attend_key="attend_pre", logged_in=True, token=TOKEN, solve_ok=True,
-             pairs=None, submit_ret="submitted", home_fails=0, accept_cookies=True):
+             pairs=None, submit_ret="submitted", nav_fails=0,
+             cdp_ok=True, page_cookie_ok=True):
     login_url = site.home.replace("index.php", "login.php")
     routes = {
         "home": (site.home, "x" * 300, False),
@@ -131,7 +164,8 @@ def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
     }
     state = {"key": "home", "logged_in": logged_in, "token": token,
              "after_key": "result", "submit_ret": submit_ret,
-             "home_fails": home_fails, "accept_cookies": accept_cookies}
+             "nav_fails": nav_fails, "cdp_ok": cdp_ok,
+             "page_cookie_ok": page_cookie_ok}
     app_mod._turnstile_token_ok = lambda sb: bool(state["token"])
     app_mod._turnstile_present = lambda sb: True
     app_mod.handle_turnstile = lambda sb: solve_ok and bool(state["token"])
@@ -190,18 +224,35 @@ ok("attendance_audiences_turnstile_fail.png" in sb.shots, "A8b 失败留截图")
 
 # 首跑的真实 bug：sb.set_cookie 根本不存在 -> 6 条 cookie 一条没落地 -> 站点当我是游客
 # -> 302 到 login.php -> 日志却报「cookie 已失效」，把方向整个指错。注入失败必须单独说。
-st, detail, sb = run_case(SITE_A, A_PRE, accept_cookies=False)
+st, detail, sb = run_case(SITE_A, A_PRE, cdp_ok=False, page_cookie_ok=False)
 ok(st == aud.CHK_UNKNOWN and "没写进浏览器" in detail,
-   f"A9 add_cookie 失败 -> UNKNOWN 并说明是注入这步（{detail}）")
+   f"A9 两条注入路径都失败 -> UNKNOWN 并说明是注入这步（{detail}）")
 ok(sb.cookies == [], "A9b 注入失败时确实一个 cookie 都没落地")
 
-st, detail, sb = run_case(SITE_A, A_PRE, home_fails=1,
+# 关键约束：cookie 先进罐，再发第一枪。先开首页等于拿游客身份去撞 mua 的连接闸门，
+# 这条断言就是防止有人把顺序改回「导航 → 注入」。
+st, detail, sb = run_case(SITE_A, A_PRE,
                           after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
-ok(st == aud.CHK_PASS, f"A10 首页 chrome-error 重试一次就能签到（{detail}）")
+kinds = [t[0] for t in sb.timeline]
+ok(kinds[0] == "set_cookie" and "nav" in kinds and kinds.index("nav") > kinds.index("set_cookie"),
+   f"A13 第一次导航之前 cookie 已入罐（时间线 {kinds[:3]}）")
+ok(SITE_A.home not in [u for k, u in sb.timeline if k == "nav"],
+   "A13b 正常路径不再先去首页（那一趟不带 cookie，纯浪费 CF 时间）")
+ok(SITE_A.attend in [u for k, u in sb.timeline if k == "nav"], "A13c 直接打开签到页")
 
-st, detail, sb = run_case(SITE_A, A_PRE, home_fails=2)
-ok(st == aud.CHK_UNKNOWN and "首页 chrome-error" in detail,
-   f"A11 两次都 chrome-error -> 不硬撑到签到页（{detail}）")
+# CDP 不可用（少见）时退回「先开首页建域 + add_cookie」，链路仍要跑通
+st, detail, sb = run_case(SITE_A, A_PRE, cdp_ok=False,
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+ok(st == aud.CHK_PASS and ("add_cookie", "c_secure_pass") in sb.timeline,
+   f"A13d CDP 不通时退回页面建域注入（{detail}）")
+
+st, detail, sb = run_case(SITE_A, A_PRE, nav_fails=1,
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+ok(st == aud.CHK_PASS, f"A10 签到页 chrome-error 重试一次就能签到（{detail}）")
+
+st, detail, sb = run_case(SITE_A, A_PRE, nav_fails=2)
+ok(st == aud.CHK_UNKNOWN and "签到页 chrome-error" in detail and "罐里有" in detail,
+   f"A11 两次都 chrome-error -> 报错误码并附 cookie 罐（{detail}）")
 
 
 class _ErrPage:
