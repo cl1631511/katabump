@@ -106,6 +106,21 @@ ok(aud.parse_cookie_header('[{"name":"uid","value":"12345","domain":".audiences.
    == [("uid", "12345")], "Playwright cookies JSON 解析")
 ok(aud.parse_cookie_header("{不是合法JSON") == [], "坏 JSON -> []（不能当 cookie 注入）")
 ok(aud.parse_cookie_header("") == [], "空 Cookie -> []")
+# 他实际粘贴时的三种手式都得认（上一次 CI 就是卡在这里，两站秒退且原因被吞）
+ok(aud.parse_cookie_header("Cookie: uid=1; passkey=a") == [("uid", "1"), ("passkey", "a")],
+   "连「Cookie:」标签一起复制 -> 前缀要剥掉，否则第一个 cookie 名变成 'Cookie: uid' 判定就瞎了")
+ok(aud.parse_cookie_header("cookie: uid=1; passkey=a") == [("uid", "1"), ("passkey", "a")],
+   "小写 cookie: 前缀同样剥掉")
+ok(aud.parse_cookie_header("uid=1\npasskey=a") == [("uid", "1"), ("passkey", "a")],
+   "换行分隔（DevTools 多行头）")
+ok(aud.parse_cookie_header("uid\t1\npasskey\ta") == [("uid", "1"), ("passkey", "a")],
+   "Application→Cookies 网格的 name<Tab>value 逐行复制")
+ok(aud.parse_cookie_header("uid=1;  ; passkey=a") == [("uid", "1"), ("passkey", "a")],
+   "空段跳过")
+ok(aud.parse_cookie_header("auth_token=abc=def") == [("auth_token", "abc=def")],
+   "值里含 = 只按第一个 = 切")
+ok(aud.session_ok(aud.parse_cookie_header("Cookie: uid=1; passkey=a"), SITE_A),
+   "带前缀的整行粘贴同样能通过 audiences 的 uid+passkey 检查")
 ok(aud.session_ok([("uid", "1"), ("passkey", "a")], SITE_A), "audiences: uid+passkey 可用")
 ok(not aud.session_ok([("uid", "1")], SITE_A), "audiences: 缺 passkey -> 不可用")
 ok(not aud.session_ok([("cf_clearance", "a")], SITE_A), "audiences: 只有 cf_clearance -> 不可用")

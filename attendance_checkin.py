@@ -23,12 +23,24 @@ import os
 os.environ.setdefault("USERS_JSON", "[]")
 
 import json
+import re
+import sys
 import time
-import requests
 from dataclasses import dataclass
-from seleniumbase import SB
 
-import app as core
+# 浏览器/网络依赖只有真去签到或真发通知时才需要；本地 `--cookie-check` 只想验粘贴对不对，
+# 机器上没装 seleniumbase/requests 也得能用。CI 上依赖已装好，永远走不到 except。
+try:
+    import requests
+except ImportError:
+    requests = None
+try:
+    from seleniumbase import SB
+    import app as core
+    _DEPS_ERROR = ""
+except ImportError as e:
+    SB = core = None
+    _DEPS_ERROR = str(e)
 
 
 @dataclass
@@ -90,8 +102,8 @@ _BLOCKED_MARK = ("just a moment", "checking your browser", "cf-chl",
 
 def notify(lines, alert):
     """一屏汇总所有站点；alert=True 表示其中有真问题。"""
-    if not TG_BOT_TOKEN or not TG_CHAT_ID:
-        print("ℹ️ 未配置 TG_BOT_TOKEN 或 TG_CHAT_ID，跳过 Telegram 推送。")
+    if not TG_BOT_TOKEN or not TG_CHAT_ID or requests is None:
+        print("ℹ️ 未配置 TG_BOT_TOKEN 或 TG_CHAT_ID（或缺 requests），跳过 Telegram 推送。")
         return
     ts = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 8 * 3600))
     head = "⚠️ 签到异常" if alert else "✅ 签到成功"
@@ -104,9 +116,15 @@ def notify(lines, alert):
         print(f"⚠️ TG 发送异常: {e}")
 
 
+_COOKIE_LABEL = re.compile(r"^\s*(set-)?cookie\s*:\s*", re.I)
+
+
 def parse_cookie_header(raw):
-    """把浏览器 DevTools 里整条 Cookie 头（"a=1; b=2"）解析成 [(name, value)]。
-    同时兼容 JSON 形式（Playwright 的 cookies_xxx.json 那种 [{name,value},...]）。"""
+    """把浏览器里复制出来的 cookie 解析成 [(name, value)]，容忍三种常见粘法：
+      1. DevTools Network 请求头那一整行的值：  "a=1; b=2"
+      2. 连 "Cookie:" 标签一起选了：            "Cookie: a=1; b=2"
+      3. Application → Cookies 网格逐行复制：   "a\\t1\\nb\\t2"
+    另外兼容 JSON（Playwright 的 cookies_xxx.json 那种 [{name,value},...]）。"""
     raw = (raw or "").strip()
     if not raw:
         return []
@@ -122,11 +140,17 @@ def parse_cookie_header(raw):
             return out
         except Exception:
             return []  # 不是合法 JSON：宁可当没配，也别把半截字符串当 cookie 注入
+    raw = _COOKIE_LABEL.sub("", raw)
     pairs = []
-    for part in raw.split(";"):
-        name, sep, value = part.strip().partition("=")
-        if sep and name and value:
-            pairs.append((name, value.strip()))
+    for part in re.split(r"[;\r\n]+", raw):
+        part = part.strip()
+        if not part:
+            continue
+        name, sep, value = part.partition("=")
+        if not sep:
+            name, sep, value = part.partition("\t")
+        if sep and name.strip() and value.strip():
+            pairs.append((name.strip(), value.strip()))
     return pairs
 
 
@@ -410,11 +434,20 @@ def run_site(sb_kwargs, site):
     raw = os.environ.get(site.cookie_env, "")
     pairs = parse_cookie_header(raw)
     if not pairs:
-        return (CHK_NO_SESSION, f"未配置 {site.cookie_env}（浏览器 DevTools 里整条 Cookie 头）")
+        # 只报长度和格式线索，绝不打印 cookie 内容（CI 日志是公开的）
+        if not raw.strip():
+            return (CHK_NO_SESSION, f"{site.cookie_env} 未配置或为空")
+        hint = ("看起来是 JSON 但解析失败" if raw.lstrip()[0] in "[{" else "没有一组形如 name=value")
+        return (CHK_NO_SESSION,
+                f"{site.cookie_env} 长度 {len(raw)}，{hint}；"
+                "要的是 DevTools Network 里请求头 Cookie: 后面那一整行（a=1; b=2）")
     if not session_ok(pairs, site):
         need = "+".join(site.require_all) or "任一: " + "/".join(site.require_any)
         return (CHK_NO_SESSION,
                 f"{site.cookie_env} 缺少登录 cookie，需要 {need}；现有: {', '.join(n for n, _ in pairs)}")
+
+    if core is None:
+        return (CHK_UNKNOWN, f"浏览器依赖缺失，无法签到: {_DEPS_ERROR}（本地只想验 cookie 请用 --cookie-check）")
 
     pool_n = core._pool_size()
     try:
@@ -463,6 +496,16 @@ def main():
         print(f"❌ CHECKIN_SITES={wanted} 没有匹配到站点，可用: {[s.key for s in SITES]}")
         raise SystemExit(1)
 
+    if "--cookie-check" in sys.argv:
+        # 本地自检：只验「粘进去的字符串能不能解析出登录字段」，不开浏览器、不打码值
+        for site in sites:
+            raw = os.environ.get(site.cookie_env, "")
+            pairs = parse_cookie_header(raw)
+            verdict = "✅ 可用于签到" if session_ok(pairs, site) else "❌ 判为无登录态"
+            need = "+".join(site.require_all) or "任一: " + "/".join(site.require_any)
+            print(f"{site.key}: {verdict}（需要 {need}；解析出 {len(pairs)} 项：{', '.join(n for n, _ in pairs) or '无'}）")
+        raise SystemExit(0)
+
     IS_PROXY = os.environ.get("IS_PROXY", "false").lower() == "true"
     proxy_str = os.environ.get("PROXY_SERVER", "").strip() or "http://127.0.0.1:8080"
     sb_kwargs = {"uc": True, "headless": False}
@@ -479,7 +522,10 @@ def main():
         print("=" * 25)
         status, detail = run_site(sb_kwargs, site)
         icon, text = _STATUS_LINE[status]
-        lines.append(f"{icon} {site.label} {text}" + (f"：{detail}" if detail and status in _ALERT else ""))
+        # 公开仓库的 CI 日志也是公开的：成功态不带页面原文，失败态才带（原文里可能有账号名）
+        line = f"{icon} {site.label} {text}" + (f"：{detail}" if detail and status in _ALERT else "")
+        print(line)   # 无论有没有配 TG，日志里都得看得到原因
+        lines.append(line)
         if status in _ALERT:
             alert = True
         if status != CHK_ALREADY:
