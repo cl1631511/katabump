@@ -96,7 +96,7 @@ ok('class="cf-turnstile"' in A_HTML, "audiences 有 cf-turnstile 容器（_VERIF
 ok('id="attendance-form"' in A_HTML and 'id="cf-token"' in A_HTML, "audiences 表单 id 与 cf-token 字段在")
 ok('class="cf-turnstile"' in M_HTML, "mua 有 cf-turnstile 容器")
 ok('action="attendance.php"' in M_HTML and 'type="submit"' in M_HTML, "mua 是「表单+提交按钮」结构（_SUBMIT_JS 走 click）")
-ok("userdetails.php" in A_HTML and "userdetails.php" in M_HTML, "两站都有 userdetails 链接（_LOGGED_IN_JS 依据）")
+ok("userdetails.php" in A_HTML and "userdetails.php" in M_HTML, "两站都有 userdetails 链接（_PAGE_SIGNALS_JS 依据）")
 
 # ── 7. Cookie 解析与站点登录态要求 ──────────────────────────────────────────
 pairs = aud.parse_cookie_header("uid=12345; passkey=abc123; cf_clearance=fakeClearance; PHPSESSID=x")

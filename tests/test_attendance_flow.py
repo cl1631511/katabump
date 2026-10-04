@@ -141,11 +141,11 @@ class FakeSB:
 
     def execute_script(self, js):
         # 分发按各脚本的独有串，顺序即特异性顺序（几条脚本都含 innerText / cf-turnstile-response）
+        if "/*signals*/" in js: return self.state["signals"]   # _PAGE_SIGNALS_JS
         if "no-token" in js:                             # _SUBMIT_JS
             self.state["key"] = self.state["after_key"]
             return self.state["submit_ret"]
         if "人机验证" in js: return self._cur()[2]         # _VERIFY_CARD_JS
-        if "userdetails.php" in js: return self.state["logged_in"]   # _LOGGED_IN_JS
         if "i.value" in js: return self.state["token"]    # _read_token
         if "innerText" in js: return self._cur()[1]       # _BODY_TEXT_JS
         raise AssertionError("假浏览器没认出的脚本:\n" + js[:200])
@@ -154,7 +154,7 @@ class FakeSB:
 def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
              attend_key="attend_pre", logged_in=True, token=TOKEN, solve_ok=True,
              pairs=None, submit_ret="submitted", nav_fails=0,
-             cdp_ok=True, page_cookie_ok=True):
+             cdp_ok=True, page_cookie_ok=True, signals=None):
     login_url = site.home.replace("index.php", "login.php")
     routes = {
         "home": (site.home, "x" * 300, False),
@@ -162,10 +162,15 @@ def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
         "login": (login_url, "请输入用户名 " * 30, False),
         "result": (site.attend, after_body, after_card),
     }
-    state = {"key": "home", "logged_in": logged_in, "token": token,
+    state = {"key": "home", "token": token,
              "after_key": "result", "submit_ret": submit_ret,
              "nav_fails": nav_fails, "cdp_ok": cdp_ok,
-             "page_cookie_ok": page_cookie_ok}
+             "page_cookie_ok": page_cookie_ok,
+             # 真站点的 JS 探针返回计数对象；默认=已登录且签到表单在页上
+             "signals": signals if signals is not None else {
+                 "user": 1 if logged_in else 0, "login": 0,
+                 "form": 1 if card_pre else 0, "widget": 1 if card_pre else 0,
+                 "pw": 0, "len": len(pre_body)}}
     app_mod._turnstile_token_ok = lambda sb: bool(state["token"])
     app_mod._turnstile_present = lambda sb: True
     app_mod.handle_turnstile = lambda sb: solve_ok and bool(state["token"])
@@ -208,9 +213,19 @@ ok(st == aud.CHK_PASS, f"A3 无措辞但入口消失 -> PASS（{detail}）")
 st, detail, sb = run_case(SITE_A, A_PRE, attend_key="login")
 ok(st == aud.CHK_NO_SESSION, f"A4 重定向 login.php -> NO_SESSION（{detail}）")
 
-st, detail, sb = run_case(SITE_A, A_PRE, logged_in=False)
-ok(st == aud.CHK_NO_SESSION and "罐里有" in detail,
-   f"A5 无 userdetails 链接 -> NO_SESSION，并回报 cookie 罐（{detail}）")
+st, detail, sb = run_case(SITE_A, A_PRE, logged_in=False, card_pre=False,
+                          signals={"user": 0, "login": 0, "form": 0, "widget": 0,
+                                   "pw": 1, "len": 400})
+ok(st == aud.CHK_NO_SESSION and "罐里有" in detail and "密码框=1" in detail,
+   f"A5 无登录链接且无签到表单 -> NO_SESSION，并把页面特征打出来（{detail}）")
+
+# 上一版死在这里：只认 userdetails 链接，链接名一变就把有签到表单的页判成没登录。
+# 表单在页上 = 站点认为你是登录用户，必须继续走。
+st, detail, sb = run_case(SITE_A, A_PRE, logged_in=False,
+                          signals={"user": 0, "login": 0, "form": 1, "widget": 1,
+                                   "pw": 0, "len": 900},
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+ok(st == aud.CHK_PASS, f"A5b 没登录链接但签到表单在页上 -> 按已登录继续（{detail}）")
 
 st, detail, sb = run_case(SITE_A, "您今日已经签到，请勿重复打卡" + FILL)
 ok(st == aud.CHK_ALREADY, f"A6 打开即已签到措辞 -> ALREADY（{detail}）")
@@ -221,6 +236,11 @@ ok(st == aud.CHK_PASS, f"A7 打开即无验证入口 -> 判定已签到（{detai
 st, detail, sb = run_case(SITE_A, A_PRE, token="", solve_ok=False)
 ok(st == aud.CHK_VERIFY_FAIL, f"A8 Turnstile 失败 -> VERIFY_FAIL（{detail}）")
 ok("attendance_audiences_turnstile_fail.png" in sb.shots, "A8b 失败留截图")
+
+# 探针自己失灵（JS 抛/返回非 dict）时不能顺势报「站点不认 cookie」—— 那是探针的问题。
+st, detail, sb = run_case(SITE_A, A_PRE, signals="boom",
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+ok(st == aud.CHK_PASS, f"A5c 特征探针返回非 dict -> 不据此判 NO_SESSION（{detail}）")
 
 # 首跑的真实 bug：sb.set_cookie 根本不存在 -> 6 条 cookie 一条没落地 -> 站点当我是游客
 # -> 302 到 login.php -> 日志却报「cookie 已失效」，把方向整个指错。注入失败必须单独说。

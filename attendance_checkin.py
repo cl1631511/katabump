@@ -204,14 +204,25 @@ def classify_attendance(page_text, url="", verify_pending=None):
 # ===== 页面注入脚本 =====
 _BODY_TEXT_JS = "return document.body ? document.body.innerText : '';"
 
-_LOGGED_IN_JS = """
+# 页面结构信号，只回计数 —— 正文里有用户名，公开日志里一个字符都不能印。
+# user>0 = 抓到「我的空间/退出」链接（已登录）；form/widget>0 = 签到表单还在（只有登录才渲染）；
+# pw>0 = 页上有密码框（基本等于被当游客）。
+_PAGE_SIGNALS_JS = """
+/*signals*/
 (function(){
+    var out = {user: 0, login: 0, form: 0, widget: 0, pw: 0, len: 0};
     var as = document.querySelectorAll('a');
     for (var i = 0; i < as.length; i++) {
         var h = as[i].href || '';
-        if (h.indexOf('userdetails.php') > -1 || h.indexOf('logout.php') > -1) return true;
+        if (h.indexOf('userdetails.php') > -1 || h.indexOf('logout.php') > -1) out.user++;
+        if (h.indexOf('login.php') > -1) out.login++;
     }
-    return false;
+    if (document.getElementById('attendance-form') ||
+        document.querySelector('form[action*="attendance"]')) out.form = 1;
+    if (document.querySelector('.cf-turnstile, input[name="cf-turnstile-response"]')) out.widget = 1;
+    if (document.querySelector('input[type="password"]')) out.pw = 1;
+    out.len = document.body ? document.body.innerText.length : 0;
+    return out;
 })()
 """
 
@@ -426,9 +437,42 @@ def _jar_names(sb):
 
 
 def _login_markers(page):
-    """页面里有没有登录态标志 —— 公开日志只印布尔，绝不印原文（原文含账号名）。"""
+    """原始 HTML 里有没有登录态标志 —— 只给纯 HTTP 探针用（浏览器路径改用 _page_signals）。
+
+    公开日志只印布尔，绝不印原文（原文含账号名）。注意：浏览器里拿到的 innerText 永远不含
+    'userdetails.php' 这种 URL，所以这套字符串判据在浏览器路径上必然返回「无」，白指错方向。
+    """
     t = page or ""
     return ("userdetails" in t or "logout.php" in t, "login.php" in t)
+
+
+_SIGNAL_LABELS = (("user", "我的空间/退出链接"), ("login", "login.php 链接"),
+                  ("form", "签到表单"), ("widget", "Turnstile"), ("pw", "密码框"))
+
+
+def _page_signals(sb):
+    """页面结构信号（计数）。JS 跑不了就返回 None —— 那是探针失灵，不能当成「站点不认」。"""
+    try:
+        raw = sb.execute_script(_PAGE_SIGNALS_JS)
+    except Exception as e:
+        print(f"  ⚠️ 页面特征探针失灵: {type(e).__name__}")
+        return None
+    if not isinstance(raw, dict):
+        return None
+    out = {}
+    for k in ("user", "login", "form", "widget", "pw", "len"):
+        try:
+            out[k] = int(raw.get(k) or 0)
+        except (TypeError, ValueError):
+            out[k] = 0
+    return out
+
+
+def _fmt_signals(sig):
+    if not sig:
+        return "探针未取到"
+    return (" ".join(f"{label}={sig[k]}" for k, label in _SIGNAL_LABELS)
+            + f" 正文长度={sig['len']}")
 
 
 def checkin(sb_kwargs, site, pairs):
@@ -476,18 +520,16 @@ def checkin(sb_kwargs, site, pairs):
                 return (CHK_NO_SESSION,
                         "首枪即带 cookie 仍被重定向到登录页 —— 站点不认这串 cookie"
                         f"（过期，或绑定原出口 IP/UA）；罐里有 {', '.join(_jar_names(sb)) or '空'}")
-            try:
-                logged_in = bool(sb.execute_script(_LOGGED_IN_JS))
-            except Exception:
-                logged_in = False
-            if not logged_in:
+            sig = _page_signals(sb)
+            if sig and not sig.get("user") and not (sig.get("form") or sig.get("widget")):
                 jar = _jar_names(sb)
-                has_login, has_login_page = _login_markers(text)
                 return (CHK_NO_SESSION,
-                        "注入 cookie 后仍未登录："
-                        f"罐里有 {', '.join(jar) or '空'}；"
-                        f"页面登录态标志={'有' if has_login else '无'}/"
-                        f"{'出现登录页' if has_login_page else '无登录页'}")
+                        "cookie 确实随首枪发出，但站点没给出登录页：只有两种可能 —— "
+                        "会话已失效，或会话绑死了复制 cookie 那台机器的出口 IP/UA。"
+                        f"罐里有 {', '.join(jar) or '空'}；页面特征 {_fmt_signals(sig)}")
+            if sig is not None and not sig.get("user"):
+                print(f"  ℹ️ 没抓到「我的空间/退出」链接，但签到表单在页上 —— 按已登录继续"
+                      f"（特征 {_fmt_signals(sig)}）")
             pending = _verify_pending(sb)
             if st in (CHK_PASS, CHK_ALREADY):
                 shot("result")
