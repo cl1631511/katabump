@@ -141,14 +141,32 @@ class FakeSB:
 
     def execute_script(self, js):
         # 分发按各脚本的独有串，顺序即特异性顺序（几条脚本都含 innerText / cf-turnstile-response）
-        if "/*signals*/" in js: return self.state["signals"]   # _PAGE_SIGNALS_JS
+        if "/*signals*/" in js: return self._signals()   # _PAGE_SIGNALS_JS
         if "no-token" in js:                             # _SUBMIT_JS
             self.state["key"] = self.state["after_key"]
+            self.state["submitted"] = True
             return self.state["submit_ret"]
-        if "人机验证" in js: return self._cur()[2]         # _VERIFY_CARD_JS
         if "i.value" in js: return self.state["token"]    # _read_token
         if "innerText" in js: return self._cur()[1]       # _BODY_TEXT_JS
         raise AssertionError("假浏览器没认出的脚本:\n" + js[:200])
+
+    def _signals(self):
+        """特征必须跟着「当前这一页」走：提交之后入口就没了，写死一份会测不出真假。
+
+        signals 覆盖只作用于提交前那页 —— 它是用来构造页面剧本的，不是永久属性，
+        否则「提交后入口消失」这条最关键的路径永远测不到。
+        """
+        _url, body, card = self._cur()
+        sig = {"user": 1 if self.state["logged_in"] else 0, "login": 0,
+               "form": 1 if card else 0, "widget": 1 if card else 0,
+               "btn": 1 if card else 0, "cf": 1 if card else 0,
+               "pw": 0, "len": len(body)}
+        if self.state.get("submitted"):
+            return sig
+        if self.state.get("signals") == "boom":
+            return "boom"
+        sig.update(self.state["signals"] or {})
+        return sig
 
 
 def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
@@ -162,15 +180,12 @@ def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
         "login": (login_url, "请输入用户名 " * 30, False),
         "result": (site.attend, after_body, after_card),
     }
-    state = {"key": "home", "token": token,
+    state = {"key": "home", "logged_in": logged_in, "token": token,
              "after_key": "result", "submit_ret": submit_ret,
              "nav_fails": nav_fails, "cdp_ok": cdp_ok,
-             "page_cookie_ok": page_cookie_ok,
-             # 真站点的 JS 探针返回计数对象；默认=已登录且签到表单在页上
-             "signals": signals if signals is not None else {
-                 "user": 1 if logged_in else 0, "login": 0,
-                 "form": 1 if card_pre else 0, "widget": 1 if card_pre else 0,
-                 "pw": 0, "len": len(pre_body)}}
+             "page_cookie_ok": page_cookie_ok, "submitted": False,
+             # None = 由当前页的 card 标志推导；给了就覆盖「提交前」那页（构造特殊页面）
+             "signals": signals}
     app_mod._turnstile_token_ok = lambda sb: bool(state["token"])
     app_mod._turnstile_present = lambda sb: True
     app_mod.handle_turnstile = lambda sb: solve_ok and bool(state["token"])
@@ -230,8 +245,16 @@ ok(st == aud.CHK_PASS, f"A5b 没登录链接但签到表单在页上 -> 按已�
 st, detail, sb = run_case(SITE_A, "您今日已经签到，请勿重复打卡" + FILL)
 ok(st == aud.CHK_ALREADY, f"A6 打开即已签到措辞 -> ALREADY（{detail}）")
 
+# 上一版在这里报 PASS（「入口不在大概就是签好了」），mua 就这么被假绿了一整轮：
+# 页面只有签到记录表格、既没入口也没成功措辞 —— 读不懂只能报红，绝不猜绿。
 st, detail, sb = run_case(SITE_A, "今日签到记录：连续 12 天" + FILL, card_pre=False)
-ok(st == aud.CHK_PASS, f"A7 打开即无验证入口 -> 判定已签到（{detail}）")
+ok(st == aud.CHK_UNKNOWN and "宁红不绿" in detail,
+   f"A7 打开即无入口又无措辞 -> UNKNOWN 而非 PASS（{detail}）")
+
+# mua 的「立即签到」可能是 onclick 按钮、不在 <form> 里：入口判据不能只认 form 元素。
+st, detail, sb = run_case(SITE_A, A_PRE, signals={"form": 0, "widget": 0, "btn": 1},
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+ok(st == aud.CHK_PASS, f"A7b 只有文字按钮、没有 form 元素 -> 仍算有入口并签到（{detail}）")
 
 st, detail, sb = run_case(SITE_A, A_PRE, token="", solve_ok=False)
 ok(st == aud.CHK_VERIFY_FAIL, f"A8 Turnstile 失败 -> VERIFY_FAIL（{detail}）")

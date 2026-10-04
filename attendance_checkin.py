@@ -205,12 +205,13 @@ def classify_attendance(page_text, url="", verify_pending=None):
 _BODY_TEXT_JS = "return document.body ? document.body.innerText : '';"
 
 # 页面结构信号，只回计数 —— 正文里有用户名，公开日志里一个字符都不能印。
-# user>0 = 抓到「我的空间/退出」链接（已登录）；form/widget>0 = 签到表单还在（只有登录才渲染）；
+# user>0 = 抓到「我的空间/退出」链接（已登录）；form/widget/btn>0 = 签到入口还在（只有登录才渲染）；
+# cf = 页上有 CF 挑战的 script/iframe/window.turnstile（只当诊断，不算入口：脚本签到后仍留在 DOM）；
 # pw>0 = 页上有密码框（基本等于被当游客）。
 _PAGE_SIGNALS_JS = """
 /*signals*/
 (function(){
-    var out = {user: 0, login: 0, form: 0, widget: 0, pw: 0, len: 0};
+    var out = {user: 0, login: 0, form: 0, widget: 0, btn: 0, cf: 0, pw: 0, len: 0};
     var as = document.querySelectorAll('a');
     for (var i = 0; i < as.length; i++) {
         var h = as[i].href || '';
@@ -220,39 +221,50 @@ _PAGE_SIGNALS_JS = """
     if (document.getElementById('attendance-form') ||
         document.querySelector('form[action*="attendance"]')) out.form = 1;
     if (document.querySelector('.cf-turnstile, input[name="cf-turnstile-response"]')) out.widget = 1;
+    var cand = document.querySelectorAll('input[type="submit"], input[type="button"], button, [role="button"]');
+    for (var j = 0; j < cand.length; j++) {
+        var s = cand[j].value || cand[j].innerText || '';
+        if (s.indexOf('已签到') > -1 || s.indexOf('已经签到') > -1 || s.indexOf('重复') > -1) continue;
+        if (s.indexOf('立即签到') > -1 || s.indexOf('签到') > -1 || s.indexOf('打卡') > -1) out.btn++;
+    }
+    if (document.querySelector('iframe[src*="challenges.cloudflare.com"], ' +
+        'script[src*="challenges.cloudflare.com"], .cf-turnstile') || window.turnstile) out.cf = 1;
     if (document.querySelector('input[type="password"]')) out.pw = 1;
     out.len = document.body ? document.body.innerText.length : 0;
     return out;
 })()
 """
 
-# 「还要去验证」的证据优先级：widget 元素 > 指向 attendance 的提交按钮 > 页面文案。
-# 文案（安全验证/立即签到）在签到后的记录页可能仍作为标题残留，所以只在前两者都查不到时兜底，
-# 且要求它出现在 attendance 表单还在的页面上 —— 宁可判不出，不可报假绿。
-_VERIFY_CARD_JS = """
-(function(){
-    if (document.querySelector('.cf-turnstile, input[name="cf-turnstile-response"]')) return true;
-    var f = document.getElementById('attendance-form') || document.querySelector('form[action*="attendance"]');
-    if (f && f.querySelector('input[type="submit"], button[type="submit"]')) return true;
-    var b = document.body ? document.body.innerText : '';
-    if (f && (b.indexOf('人机验证') > -1 || b.indexOf('安全验证') > -1 || b.indexOf('立即签到') > -1)) return true;
-    return false;
-})()
-"""
-
 # audiences 的 widget 靠 data-callback 自动提交；mua 有真实按钮 —— 有按钮就点按钮。
+# 按钮不止一种写法（input type=submit / type=button / button / a），所以按文案找，别只认 type。
 _SUBMIT_JS = """
 (function(){
     var t = document.querySelector('input[name="cf-turnstile-response"]');
     if (!t || !t.value || t.value.length < 20) return 'no-token';
     var f = document.getElementById('attendance-form') || document.querySelector('form[action*="attendance"]');
-    if (!f) return 'no-form';
-    var hidden = document.getElementById('cf-token');
-    if (hidden) hidden.value = t.value;
-    var btn = f.querySelector('input[type="submit"], button[type="submit"]');
-    if (btn) { btn.click(); return 'clicked'; }
-    f.submit();
-    return 'submitted';
+    var scope = f || document;
+    var btn = f ? f.querySelector('input[type="submit"], button[type="submit"]') : null;
+    if (!btn) {
+        var cand = scope.querySelectorAll('input[type="submit"], input[type="button"], button, [role="button"]');
+        for (var i = 0; i < cand.length; i++) {
+            var s = cand[i].value || cand[i].innerText || '';
+            if (s.indexOf('已签到') > -1 || s.indexOf('已经签到') > -1 || s.indexOf('重复') > -1) continue;
+            if (s.indexOf('立即签到') > -1 || s.indexOf('打卡') > -1 || s.indexOf('签到') > -1) { btn = cand[i]; break; }
+        }
+    }
+    if (btn) {
+        var hid = document.getElementById('cf-token');
+        if (hid) hid.value = t.value;
+        btn.click();
+        return 'clicked';
+    }
+    if (f) {
+        var hid2 = document.getElementById('cf-token');
+        if (hid2) hid2.value = t.value;
+        f.submit();
+        return 'submitted';
+    }
+    return 'no-form';
 })()
 """
 
@@ -269,14 +281,39 @@ def _chrome_error(url):
     return "chrome-error" in low or "chromewebdata" in low
 
 
+def _has_entry(sig):
+    """页面上有没有「去完成签到」的入口（attendance 表单 / Turnstile / 签到按钮）。
+    sig=None（探针失灵）时保守当真有 —— 宁可多跑一遍验证，也不能反过来说「没入口=已签好」。"""
+    if sig is None:
+        return True
+    return bool(sig["form"] or sig["widget"] or sig["btn"])
+
+
 def _verify_pending(sb):
-    """签到页是否还挂着验证入口。正文过短（没渲染完/被拦截）时一律返回 True。"""
-    if len(_body_text(sb)) < 200:
+    """_has_entry 的浏览器版：正文过短（没渲染完/被拦截）时同样保守返回 True。
+    上一版的假绿就是把「探针没读到入口」当成了「站点认为今天已签」。"""
+    sig = _page_signals(sb)
+    if sig is None or sig["len"] < 200:
         return True
-    try:
-        return bool(sb.execute_script(_VERIFY_CARD_JS))
-    except Exception:
-        return True
+    return _has_entry(sig)
+
+
+def _wait_for_outcome(sb, sig, secs=12):
+    """刚打开的页面要等 JS：CF 组件/签到按钮可能晚几秒才出现，成功页也可能是自动跳转来的
+    （audiences 过完验证就跳走）。等到入口、或等到结果措辞就立刻返回，不等满。
+
+    返回 (入口在否, 最新正文, 最新特征)。
+    """
+    text = ""
+    for _ in range(secs):
+        if _has_entry(sig):
+            return True, _body_text(sb), sig
+        text = _body_text(sb)
+        if any(k in text for k in _SUCCESS_KW + _ALREADY_KW + _FAIL_KW):
+            return False, text, sig
+        time.sleep(1)
+        sig = _page_signals(sb) or sig
+    return False, (text or _body_text(sb)), sig
 
 
 def _navigate(sb, url, wait_s=25):
@@ -447,7 +484,8 @@ def _login_markers(page):
 
 
 _SIGNAL_LABELS = (("user", "我的空间/退出链接"), ("login", "login.php 链接"),
-                  ("form", "签到表单"), ("widget", "Turnstile"), ("pw", "密码框"))
+                  ("form", "签到表单"), ("widget", "Turnstile"), ("btn", "签到按钮"),
+                  ("cf", "CF组件"), ("pw", "密码框"))
 
 
 def _page_signals(sb):
@@ -460,7 +498,7 @@ def _page_signals(sb):
     if not isinstance(raw, dict):
         return None
     out = {}
-    for k in ("user", "login", "form", "widget", "pw", "len"):
+    for k in ("user", "login", "form", "widget", "btn", "cf", "pw", "len"):
         try:
             out[k] = int(raw.get(k) or 0)
         except (TypeError, ValueError):
@@ -521,26 +559,40 @@ def checkin(sb_kwargs, site, pairs):
                         "首枪即带 cookie 仍被重定向到登录页 —— 站点不认这串 cookie"
                         f"（过期，或绑定原出口 IP/UA）；罐里有 {', '.join(_jar_names(sb)) or '空'}")
             sig = _page_signals(sb)
-            if sig and not sig.get("user") and not (sig.get("form") or sig.get("widget")):
+            print(f"🔎 首枪后页面特征: {_fmt_signals(sig)}")
+            if sig and not sig.get("user") and not _has_entry(sig):
                 jar = _jar_names(sb)
                 return (CHK_NO_SESSION,
                         "cookie 确实随首枪发出，但站点没给出登录页：只有两种可能 —— "
                         "会话已失效，或会话绑死了复制 cookie 那台机器的出口 IP/UA。"
                         f"罐里有 {', '.join(jar) or '空'}；页面特征 {_fmt_signals(sig)}")
             if sig is not None and not sig.get("user"):
-                print(f"  ℹ️ 没抓到「我的空间/退出」链接，但签到表单在页上 —— 按已登录继续"
+                print(f"  ℹ️ 没抓到「我的空间/退出」链接，但签到入口在页上 —— 按已登录继续"
                       f"（特征 {_fmt_signals(sig)}）")
-            pending = _verify_pending(sb)
             if st in (CHK_PASS, CHK_ALREADY):
                 shot("result")
                 _dump_evidence(site, text)
                 print("ℹ️ 页面已显示签到结果，跳过提交")
                 return (st, _first_result_line(text) or "签到页已反映结果")
-            if not pending:
-                # 验证入口不在 = 站点认为今天已签（措辞未知，入口存在与否是唯一可靠信号）
+
+            # 入口和结果措辞都可能是 JS 后渲染的（CF 组件尤其慢），先等页面稳定再判
+            entry, text, sig2 = _wait_for_outcome(sb, _page_signals(sb) or sig)
+            if sig2:
+                sig = sig2
+            url = sb.get_current_url() or url
+            st = classify_attendance(text, url)
+            if st in (CHK_PASS, CHK_ALREADY, CHK_VERIFY_FAIL):
                 shot("result")
                 _dump_evidence(site, text)
-                return (CHK_PASS, "签到页已无验证入口，判定今日已签到")
+                return (st, _first_result_line(text) or "签到页已反映结果")
+            if not entry:
+                # 上一版在这里报 PASS（「入口不在大概就是签好了」），结果 mua 根本没点过按钮 —— 
+                # 读不懂就报红，绝不猜绿。
+                shot("result")
+                _dump_evidence(site, text)
+                return (CHK_UNKNOWN,
+                        "打开签到页后既没出现签到入口、也没有成功/已签到措辞，读不出结果"
+                        f"（宁红不绿）；页面特征 {_fmt_signals(sig)}")
 
             print("🧩 处理签到页 Turnstile...")
             token = _solve_turnstile(sb)
@@ -571,7 +623,13 @@ def checkin(sb_kwargs, site, pairs):
                 if st != CHK_UNKNOWN:
                     shot("result")
                     _dump_evidence(site, body)
-                    return (st, _first_result_line(body))
+                    line = _first_result_line(body)
+                    if st == CHK_PASS and not line:
+                        # 成功措辞还没有真实样本，这一路靠「我们提交过 + 入口消失了」判定；
+                        # 把判定依据原话写进日志，别让人以为页面真的印了「签到成功」。
+                        line = ("提交后" + ("页面已离开签到页" if not still else "签到入口已消失")
+                                + "，无明确成功措辞 —— 按入口消失判定今日已签到")
+                    return (st, line)
             shot("result")
             _dump_evidence(site, _body_text(sb))
             return (CHK_UNKNOWN, "提交后 20s 内未读到明确结果")
