@@ -602,26 +602,31 @@ def _solve_turnstile(sb):
     if tok:
         return tok
     _diag_turnstile(sb)
-    tried = 0
+    tried = False
     for attempt in (1, 2, 3):
         sig = _page_signals(sb)
-        if not (sig and (sig["widget"] or sig["cf"])):
+        if sig is not None and not (sig["widget"] or sig["cf"]):
+            if tried:
+                # 组件不见了而我们确实点过 —— 大概率是验证已经过了、widget 被站点收走
+                # （audiences 就是这样：过完 CF 直接提交跳转，token 反而留在 iframe 里读不到）。
+                # 这里不能报 None，否则调用点会把一个真成功当成「没点过」判红。
+                print("🧩 组件已从页面上消失（点过之后）—— 交给调用点读最终页面")
+                return ""
             print("⚠️ 页面上没有 Turnstile 组件、也没签发 token —— 不做点击尝试")
             return None
         print(f"🧩 第 {attempt} 次尝试过验证...")
-        tried += 1
         if attempt == 1:
-            _click_turnstile(sb)
+            tried = _click_turnstile(sb) or tried
         elif attempt == 2:
-            _shadow_click(sb)
+            tried = _shadow_click(sb) or tried
         else:
-            _api_execute(sb)
+            tried = _api_execute(sb) or tried
         tok = _wait_token(sb, 12, f"（第 {attempt} 次尝试后）")
         if tok:
             return tok
     _diag_turnstile(sb)
-    print(f"❌ 试过 {tried} 招仍没有 token")
-    return ""
+    print(f"❌ 试过 3 招仍没有 token")
+    return "" if tried else None
 
 
 def _body_text(sb):
@@ -862,6 +867,12 @@ def checkin(sb_kwargs, site, pairs):
 
             core._install_turnstile_hook_cdp(sb)
             try:
+                # xvfb 给了 1920x1080，Chrome 默认只开 1280x753 —— 上一轮 audiences 的
+                # widget 落在 y=1033，整个复选框在视口外，点下去点是空气
+                sb.driver.maximize_window()
+            except Exception as e:
+                print(f"  ℹ️ 窗口没最大化: {type(e).__name__}")
+            try:
                 sb.open("https://ipv4.icanhazip.com")
                 ip_text = (sb.get_text("body") or "").strip()
                 print(f"📍  当前出口IP: {ip_text}")
@@ -934,17 +945,37 @@ def checkin(sb_kwargs, site, pairs):
             print("🧩 处理签到页 Turnstile...")
             token = _solve_turnstile(sb)
             if token is None:
-                # 入口在、但页上没有可点的东西也没 token：可能是组件还没渲染出来，也可能是
-                # 页面结构和我们认识的不一样。没点过任何东西就不能说「签好了」。
+                # 从头到尾没点着任何东西：不能猜结果。特征要重新读一遍 —— 上一版这里印的是
+                # 点之前的旧快照，页面其实已经变了，读日志的人看不到到底差在哪一步。
                 shot("no_widget")
-                _dump_evidence(site, _body_text(sb))
+                fin = _body_text(sb)
+                _dump_evidence(site, fin)
                 return (CHK_UNKNOWN,
-                        "签到页有入口，但 10s 内既没出现 Turnstile 组件也没拿到 token，"
-                        f"没点任何东西不能猜结果（宁红不绿）；页面特征 {_fmt_signals(sig)}")
+                        "签到页有入口，但 30s 内既没出现可点的 Turnstile 组件也没拿到 token，"
+                        "没点任何东西不能猜结果（宁红不绿）；"
+                        f"页面特征 {_fmt_signals(_page_signals(sb) or sig)}")
             if not token:
+                # 确实点过（或调过 execute）但 token 没回到我们读得到的地方。
+                # CF 的 widget 常挂在 closed shadow root 里（JS 看不见、切不进去），过完验证
+                # 站点自己 submit + 跳转，我们这一侧就只剩「页面变成结果页」这一个证据。
+                fin = _body_text(sb)
+                furl = sb.get_current_url() or ""
+                fsig = _page_signals(sb)
+                st = classify_attendance(fin, furl,
+                                         verify_pending=bool(_has_entry(fsig)) if fsig else True)
+                _dump_evidence(site, fin)
+                if st in (CHK_PASS, CHK_ALREADY):
+                    shot("result")
+                    return (st, _kw_detail(fin) or "点过验证后页面已反映签到结果")
                 shot("turnstile_fail")
-                _dump_evidence(site, _body_text(sb))
-                return (CHK_VERIFY_FAIL, "Turnstile 未签发 token")
+                if st == CHK_VERIFY_FAIL:
+                    return (st, _kw_detail(fin) or "Turnstile 未签发 token")
+                if st == CHK_NO_SESSION:
+                    shot("result")
+                    return (st, "点过验证后被踢回登录页 —— 会话没通过 CF 这一关")
+                return (CHK_VERIFY_FAIL,
+                        f"试过 3 招仍没拿到 token，页面也没给出结果措辞；"
+                        f"特征 {_fmt_signals(fsig)}")
 
             # widget 的回调可能已自动提交；入口还在则手动补一次
             time.sleep(2)

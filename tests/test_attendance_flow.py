@@ -138,8 +138,13 @@ class FakeSB:
             self.timeline.append(("mouse", params.get("type"),
                                   params.get("x"), params.get("y")))
             if params.get("type") == "mouseReleased" and self.state.get("solve_ok"):
-                # 模拟「点得动」：真事件发出去后 CF 才把 token 填进 input
-                self.state["token"] = self.state.get("issued") or TOKEN
+                if self.state["solve_ok"] == "nav":
+                    # audiences 的真实形状：CF 一过站点自己 submit + 跳转，token 只在
+                    # closed shadow root 里过一道手，我们的 input 探针从头到尾读不到
+                    self.state["key"] = self.state["after_key"]
+                else:
+                    # 模拟「点得动」：真事件发出去后 CF 才把 token 填进 input
+                    self.state["token"] = self.state.get("issued") or TOKEN
             return {}
         if cmd != "Network.setCookie":
             raise AssertionError(f"假浏览器没认出的 CDP 命令: {cmd}")
@@ -443,6 +448,21 @@ ok(st == aud.CHK_PASS and len(rel) == 1 and (rel[0][2], rel[0][3]) == (734, 332)
    f"A14g widget 在 shadow root 里：量得到矩形就按它点，不去切 frame（{rel and rel[0][2:]}）")
 ok(not [t for t in sb.timeline if t[0] == "frame_in"],
    "A14g2 影子里的 iframe 切不进去，代码不能去切")
+
+
+# audiences 实测形状：点下去之后组件消失 + 页面变结果页，但 token 一次都没读到过
+st, detail, sb = run_case(SITE_A, A_PRE, token="", solve_ok="nav",
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+ok(st == aud.CHK_PASS,
+   f"A16 点过之后组件消失、没读到 token -> 读最终页面判 PASS（{detail}）")
+ok(len([t for t in sb.timeline if t[0] == "mouse" and t[1] == "mouseReleased"]) == 1,
+   "A16b 已经跳走就不该再点第二下")
+
+st, detail, sb = run_case(SITE_A, A_PRE, token="", solve_ok="nav",
+                          after_body="Checking your browser before accessing audiences.me" + FILL,
+                          after_card=False)
+ok(st == aud.CHK_VERIFY_FAIL,
+   f"A16c 点过之后掉回 CF 拦截页 -> 红，不能顺着「组件没了」判绿（{detail}）")
 
 
 # 折叠线外的复选框点不到：定位脚本必须先 scrollIntoView 再量矩形（CI 里容器 y=1033 而屏幕 1080）
