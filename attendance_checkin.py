@@ -276,7 +276,8 @@ def _navigate(sb, url, wait_s=25):
         if _chrome_error(cur):
             return cur, ""
         text = _body_text(sb)
-        if text and not any(m in text.lower() for m in _BLOCKED_MARK):
+        low = ((text or "") + " " + (sb.get_title() or "")).lower()
+        if text and not any(m in low for m in _BLOCKED_MARK):
             print(f"✅ 页面就绪（{i + 1}s）: {(sb.get_title() or '')[:40]}")
             return cur, text
         if i in (0, 9, 19):
@@ -285,13 +286,45 @@ def _navigate(sb, url, wait_s=25):
     return (sb.get_current_url() or ""), _body_text(sb)
 
 
+_CF_COOKIES = ("cf_clearance", "__cf_bm", "_cfuvid", "cfruid")
+
+
 def _inject_cookies(sb, pairs, site):
+    """逐条写入当前域的 cookie，返回真正落地的名字。
+
+    两件事是首跑之后加上的：
+    1. API 名字 —— SeleniumBase 的 BaseCase 只有 add_cookie(dict)，没有 set_cookie。
+       首跑（commit ba8e390）6 条全抛 AttributeError，站点看到的是游客，被 302 到 login.php，
+       日志却翻译成「cookie 已失效」，白指错方向。
+    2. CF 自己的凭证（cf_clearance 等）绑出口 IP + UA，把他浏览器里那份带到 CI 的出口，
+       等于给 CF 证明同一凭证在两个 IP/UA 反复出现，反而更容易卡在盾里 —— 一律不注入，
+       让 CI 的浏览器自己过 CF。
+    """
+    landed, skipped = [], []
     for name, value in pairs:
+        if name.lower() in _CF_COOKIES:
+            skipped.append(name)
+            continue
         try:
-            sb.set_cookie(name, value, domain=site.domain, path="/")
+            sb.add_cookie({"name": name, "value": value,
+                           "domain": site.domain, "path": "/"})
+            landed.append(name)
         except Exception as e:
-            print(f"  ⚠️ cookie {name} 注入失败: {e}")
-    print(f"🍪 已注入 {len(pairs)} 个 cookie: {', '.join(n for n, _ in pairs)}")
+            # 只报异常类型：Selenium 的报错文本里可能整段回显 cookie 值（CI 日志是公开的）
+            print(f"  ⚠️ cookie {name} 注入失败: {type(e).__name__}")
+    print(f"🍪 注入成功 {len(landed)}/{len(pairs) - len(skipped)}: {', '.join(landed) or '无'}"
+          + (f"｜不注入 CF 凭证: {', '.join(skipped)}" if skipped else ""))
+    return landed
+
+
+def _net_error(sb):
+    """chrome-error 页面上的 ERR_XXX，比「出口不可用」有用得多。"""
+    try:
+        blob = (sb.get_title() or "") + " " + (sb.get_text("body") or "")
+    except Exception:
+        return ""
+    m = re.search(r"ERR_[A-Z0-9_]+", blob)
+    return m.group(0) if m else ""
 
 
 def _read_token(sb):
@@ -371,12 +404,18 @@ def checkin(sb_kwargs, site, pairs):
             # 先建域再写 cookie：Selenium 只允许给当前页面所属域设 cookie
             url, _ = _navigate(sb, site.home)
             if _chrome_error(url):
-                return (CHK_UNKNOWN, "首页 chrome-error（出口不可用）")
-            _inject_cookies(sb, pairs, site)
+                url, _ = _navigate(sb, site.home)   # 同一节点上的偶发失败，再给一次机会
+            if _chrome_error(url):
+                return (CHK_UNKNOWN, f"首页 chrome-error（{_net_error(sb) or '出口不可用'}）")
+            landed = _inject_cookies(sb, pairs, site)
+            if not any(k in landed for k in _SESSION_KEYS):
+                return (CHK_UNKNOWN,
+                        f"登录 cookie 没写进浏览器（落地: {', '.join(landed) or '无'}）"
+                        "—— 是注入这步失败，不是站点拒绝")
 
             url, text = _navigate(sb, site.attend)
             if _chrome_error(url):
-                return (CHK_UNKNOWN, "签到页 chrome-error（出口不可用）")
+                return (CHK_UNKNOWN, f"签到页 chrome-error（{_net_error(sb) or '出口不可用'}）")
             st = classify_attendance(text, url)
             if st == CHK_NO_SESSION:
                 return (CHK_NO_SESSION, "被重定向到登录页，cookie 已失效")
@@ -536,7 +575,7 @@ def main():
             alert = True
         if status != CHK_ALREADY:
             quiet = False
-        if status == CHK_UNKNOWN:
+        if status == CHK_UNKNOWN and os.path.exists(f"attendance_result_{site.key}.txt"):
             print(f"📄 未命中关键词时的页面文本见 artifact: attendance_result_{site.key}.txt")
 
     print("\n" + "#" * 25)

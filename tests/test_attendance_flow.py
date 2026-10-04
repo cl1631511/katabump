@@ -81,12 +81,24 @@ class FakeSB:
     def save_screenshot(self, name): self.shots.append(name)
 
     def uc_open_with_reconnect(self, url, reconnect_time=6):
-        self.state["key"] = self.nav_map.get(url.split("?")[0], "home")
+        k = self.nav_map.get(url.split("?")[0], "home")
+        if k == "home" and self.state.get("home_fails", 0) > 0:
+            self.state["home_fails"] -= 1
+            self.state["err_page"] = True
+        else:
+            self.state["err_page"] = False
+            self.state["key"] = k
 
-    def set_cookie(self, name, value, domain=None, path=None):
-        self.cookies.append((name, domain))
+    def add_cookie(self, cookie_dict, expiry=False):
+        # 名字与 SeleniumBase 真实 API 一致；写成 set_cookie 就是首跑那个 bug
+        if not self.state.get("accept_cookies", True):
+            raise AttributeError("'BaseCase' object has no attribute 'set_cookie'")
+        self.cookies.append((cookie_dict["name"], cookie_dict["domain"]))
 
-    def get_current_url(self): return self._cur()[0]
+    def get_current_url(self):
+        if self.state.get("err_page"):
+            return "chrome-error://chromewebdata/"
+        return self._cur()[0]
 
     def _cur(self):
         return self.routes[self.state["key"]]
@@ -105,7 +117,7 @@ class FakeSB:
 
 def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
              attend_key="attend_pre", logged_in=True, token=TOKEN, solve_ok=True,
-             pairs=None, submit_ret="submitted"):
+             pairs=None, submit_ret="submitted", home_fails=0, accept_cookies=True):
     login_url = site.home.replace("index.php", "login.php")
     routes = {
         "home": (site.home, "x" * 300, False),
@@ -114,7 +126,8 @@ def run_case(site, pre_body, card_pre=True, after_body="", after_card=False,
         "result": (site.attend, after_body, after_card),
     }
     state = {"key": "home", "logged_in": logged_in, "token": token,
-             "after_key": "result", "submit_ret": submit_ret}
+             "after_key": "result", "submit_ret": submit_ret,
+             "home_fails": home_fails, "accept_cookies": accept_cookies}
     app_mod._turnstile_token_ok = lambda sb: bool(state["token"])
     app_mod._turnstile_present = lambda sb: True
     app_mod.handle_turnstile = lambda sb: solve_ok and bool(state["token"])
@@ -142,8 +155,10 @@ def ok(cond, label):
 # ===== audiences（无按钮，widget 回调自动提交）=====
 st, detail, sb = run_case(SITE_A, A_PRE, after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
 ok(st == aud.CHK_PASS, f"A1 正常链路 -> PASS（{detail}）")
-ok(sb.cookies == [("c_secure_uid", ".audiences.me"), ("c_secure_pass", ".audiences.me"),
-                  ("cf_clearance", ".audiences.me")], "A1b 安全模式 cookie 注入到 .audiences.me")
+ok(sb.cookies == [("c_secure_uid", ".audiences.me"), ("c_secure_pass", ".audiences.me")],
+   "A1b 安全模式 cookie 注入到 .audiences.me")
+ok(("cf_clearance", ".audiences.me") not in sb.cookies,
+   "A1b2 cf_clearance 一律不注入（它绑他家的出口 IP/UA，带进 CI 反而更容易卡盾）")
 ok("attendance_audiences_result.png" in sb.shots, "A1c 成功也留截图，文件名带站点")
 
 st, detail, sb = run_case(SITE_A, A_PRE, after_body=A_PRE, after_card=True)
@@ -167,6 +182,29 @@ ok(st == aud.CHK_PASS, f"A7 打开即无验证入口 -> 判定已签到（{detai
 st, detail, sb = run_case(SITE_A, A_PRE, token="", solve_ok=False)
 ok(st == aud.CHK_VERIFY_FAIL, f"A8 Turnstile 失败 -> VERIFY_FAIL（{detail}）")
 ok("attendance_audiences_turnstile_fail.png" in sb.shots, "A8b 失败留截图")
+
+# 首跑的真实 bug：sb.set_cookie 根本不存在 -> 6 条 cookie 一条没落地 -> 站点当我是游客
+# -> 302 到 login.php -> 日志却报「cookie 已失效」，把方向整个指错。注入失败必须单独说。
+st, detail, sb = run_case(SITE_A, A_PRE, accept_cookies=False)
+ok(st == aud.CHK_UNKNOWN and "没写进浏览器" in detail,
+   f"A9 add_cookie 失败 -> UNKNOWN 并说明是注入这步（{detail}）")
+ok(sb.cookies == [], "A9b 注入失败时确实一个 cookie 都没落地")
+
+st, detail, sb = run_case(SITE_A, A_PRE, home_fails=1,
+                          after_body="恭喜，签到成功！你获得 22 粒爆米花" + FILL)
+ok(st == aud.CHK_PASS, f"A10 首页 chrome-error 重试一次就能签到（{detail}）")
+
+st, detail, sb = run_case(SITE_A, A_PRE, home_fails=2)
+ok(st == aud.CHK_UNKNOWN and "首页 chrome-error" in detail,
+   f"A11 两次都 chrome-error -> 不硬撑到签到页（{detail}）")
+
+
+class _ErrPage:
+    def get_title(self): return "mua.xloli.cc 的响应时间过长"
+    def get_text(self, sel): return "ERR_CONNECTION_TIMED_OUT"
+
+
+ok(aud._net_error(_ErrPage()) == "ERR_CONNECTION_TIMED_OUT", "A12 日志里带上 Chrome 的 ERR_ 码")
 
 # ===== mua（有「立即签到」按钮）=====
 # 这里显式用普通模式 uid+passkey，证明两种登录 cookie 形态都能走完整条链路
