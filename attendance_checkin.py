@@ -205,12 +205,13 @@ def classify_attendance(page_text, url="", verify_pending=None):
 _BODY_TEXT_JS = "return document.body ? document.body.innerText : '';"
 
 # 页面结构信号，只回计数 —— 正文里有用户名，公开日志里一个字符都不能印。
+# 顶层必须 return：execute_script 是拿脚本当「函数体」跑的，裸 IIFE 只会得到 None
+# （上一轮的假绿就是这么来的 —— bool(None) 恒为 False = 「入口不在」= 「已签到」）。
 # user>0 = 抓到「我的空间/退出」链接（已登录）；form/widget/btn>0 = 签到入口还在（只有登录才渲染）；
 # cf = 页上有 CF 挑战的 script/iframe/window.turnstile（只当诊断，不算入口：脚本签到后仍留在 DOM）；
 # pw>0 = 页上有密码框（基本等于被当游客）。
 _PAGE_SIGNALS_JS = """
-/*signals*/
-(function(){
+return /*signals*/ (function(){
     var out = {user: 0, login: 0, form: 0, widget: 0, btn: 0, cf: 0, pw: 0, len: 0};
     var as = document.querySelectorAll('a');
     for (var i = 0; i < as.length; i++) {
@@ -237,8 +238,9 @@ _PAGE_SIGNALS_JS = """
 
 # audiences 的 widget 靠 data-callback 自动提交；mua 有真实按钮 —— 有按钮就点按钮。
 # 按钮不止一种写法（input type=submit / type=button / button / a），所以按文案找，别只认 type。
+# 返回值只当诊断（clicked/submitted/...），所以顶层同样必须 return。
 _SUBMIT_JS = """
-(function(){
+return (function(){
     var t = document.querySelector('input[name="cf-turnstile-response"]');
     if (!t || !t.value || t.value.length < 20) return 'no-token';
     var f = document.getElementById('attendance-form') || document.querySelector('form[action*="attendance"]');
@@ -302,7 +304,8 @@ def _wait_for_outcome(sb, sig, secs=12):
     """刚打开的页面要等 JS：CF 组件/签到按钮可能晚几秒才出现，成功页也可能是自动跳转来的
     （audiences 过完验证就跳走）。等到入口、或等到结果措辞就立刻返回，不等满。
 
-    返回 (入口在否, 最新正文, 最新特征)。
+    返回 (入口在否, 最新正文, 最新特征)。最后那个特征必须是循环里最新读到的 ——
+    调用点拿它做后续判定，返回最初那份过期快照等于让判据退回旧值。
     """
     text = ""
     for _ in range(secs):
@@ -310,7 +313,10 @@ def _wait_for_outcome(sb, sig, secs=12):
             return True, _body_text(sb), sig
         text = _body_text(sb)
         if any(k in text for k in _SUCCESS_KW + _ALREADY_KW + _FAIL_KW):
-            return False, text, sig
+            # 措辞已经出现就别再等入口了（audiences 过完验证是直接跳成功页的），
+            # 但特征必须重新读一次：这一页的入口早就没了，调用点要用的是这个最新值。
+            fresh = _page_signals(sb)
+            return False, text, fresh if fresh is not None else sig
         time.sleep(1)
         sig = _page_signals(sb) or sig
     return False, (text or _body_text(sb)), sig
@@ -421,21 +427,34 @@ def _read_token(sb):
 
 
 def _solve_turnstile(sb):
-    """等 token；必要时调用 katabump 的 Turnstile 绕过。返回 token 字符串或 ''。"""
+    """等 token；确实有 widget 才调用 katabump 的绕过。
+
+    返回：token 字符串 / ''（点了还是没 token）/ None（页上没有验证组件，没得点）。
+
+    这里刻意不用 core._turnstile_token_ok / _turnstile_present —— 那两个探针的 JS 是裸 IIFE
+    （app.py 的 _SOLVED_JS/_EXISTS_JS），execute_script 拿到的恒是 None，所以它们在真浏览器里
+    永远报「没有」。改用自己写的 _read_token / _page_signals（顶层带 return，形状是验过的）。
+    """
     for i in range(10):
-        if core._turnstile_token_ok(sb):
-            print(f"✅ Turnstile 已静默签发 token（{i + 1}s）")
-            return _read_token(sb)
-        if core._turnstile_present(sb):
-            print(f"✅ 检测到 Turnstile widget（{i + 1}s）")
+        tok = _read_token(sb)
+        if tok:
+            print(f"✅ 已拿到 Turnstile token（{i + 1}s）")
+            return tok
+        sig = _page_signals(sb)
+        if sig and (sig["widget"] or sig["cf"]):
+            print(f"✅ 检测到 Turnstile 组件（{i + 1}s）")
             break
         time.sleep(1)
-    if not core._turnstile_token_ok(sb):
-        if not core.handle_turnstile(sb):
-            print("❌ Turnstile 未通过")
-            return ""
+    else:
+        # 10s 内既没 token 也没组件：页上没东西可点。去跑 uc_gui 点击只会白烧十分钟
+        # （2026-10-05 那次「卡在这里很久了」就是这么卡的），直接交回上层报读不出结果。
+        print("⚠️ 10s 内页上没有 Turnstile 组件、也没静默签发 token —— 不做点击尝试")
+        return None
+    if not _read_token(sb) and not core.handle_turnstile(sb):
+        print("❌ Turnstile 未通过")
+        return ""
     for _ in range(6):
-        if core._turnstile_token_ok(sb):
+        if _read_token(sb):
             break
         time.sleep(1)
     return _read_token(sb)
@@ -596,6 +615,14 @@ def checkin(sb_kwargs, site, pairs):
 
             print("🧩 处理签到页 Turnstile...")
             token = _solve_turnstile(sb)
+            if token is None:
+                # 入口在、但页上没有可点的东西也没 token：可能是组件还没渲染出来，也可能是
+                # 页面结构和我们认识的不一样。没点过任何东西就不能说「签好了」。
+                shot("no_widget")
+                _dump_evidence(site, _body_text(sb))
+                return (CHK_UNKNOWN,
+                        "签到页有入口，但 10s 内既没出现 Turnstile 组件也没拿到 token，"
+                        f"没点任何东西不能猜结果（宁红不绿）；页面特征 {_fmt_signals(sig)}")
             if not token:
                 shot("turnstile_fail")
                 _dump_evidence(site, _body_text(sb))

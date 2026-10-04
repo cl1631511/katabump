@@ -140,15 +140,34 @@ class FakeSB:
         return self.routes[self.state["key"]]
 
     def execute_script(self, js):
+        # 真 WebDriver 把脚本当「函数体」跑：顶层没有 return 语句就必然拿到 None。
+        # 上一轮的假绿就是这个形状：_VERIFY_CARD_JS 写成裸 IIFE（里面 return、外面没有），
+        # execute_script 恒返回 None -> bool(None)=False -> 「没读到入口」= 「今天已签到」。
+        # 桩必须复刻这条语义，否则这类 bug 只有 CI 能发现（而 CI 发现的代价是一整轮假绿）。
+        if self._bare_iife(js):
+            return None
         # 分发按各脚本的独有串，顺序即特异性顺序（几条脚本都含 innerText / cf-turnstile-response）
         if "/*signals*/" in js: return self._signals()   # _PAGE_SIGNALS_JS
         if "no-token" in js:                             # _SUBMIT_JS
             self.state["key"] = self.state["after_key"]
             self.state["submitted"] = True
             return self.state["submit_ret"]
-        if "i.value" in js: return self.state["token"]    # _read_token
+        if "i.value" in js:                              # _read_token
+            if self.state["token"] and self.state.get("auto_submit"):
+                # NexusPHP 的 widget data-callback 拿到 token 就自己提交了（audiences 就这样，
+                # 他实测「过了 cf 会自动跳转到签到成功的页面」）—— 这一步先发生，代码才不会被
+                # 「入口还在」的旧快照卡住。mua 不会自动提交，用 auto_submit=False 关掉。
+                self.state["key"] = self.state["after_key"]
+                self.state["submitted"] = True
+            return self.state["token"]
         if "innerText" in js: return self._cur()[1]       # _BODY_TEXT_JS
         raise AssertionError("假浏览器没认出的脚本:\n" + js[:200])
+
+    @staticmethod
+    def _bare_iife(js):
+        """脚本整体是个括号开头的表达式（IIFE），函数体里没有 return —— 真库给 None。"""
+        body = re.sub(r"^/\*.*?\*/", "", js.strip(), flags=re.S).strip()
+        return body.startswith("(")
 
     def _signals(self):
         """特征必须跟着「当前这一页」走：提交之后入口就没了，写死一份会测不出真假。
