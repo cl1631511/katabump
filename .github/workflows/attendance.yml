@@ -5,13 +5,6 @@ on:
   # 每天 UTC 1:17 (北京时间 09:17) 运行，逐站点串行签到
   - cron: '17 1 * * *'
   workflow_dispatch: # 允许手动触发
-  # 临时：签到脚本还在校准，改一次代码就想看一次结果。收敛后删掉这个 push 触发。
-  push:
-    branches: [main]
-    paths:
-    - attendance_checkin.py
-    - tests/**
-    - .github/workflows/attendance.yml
 
 jobs:
   checkin:
