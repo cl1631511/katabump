@@ -2,8 +2,8 @@ name: PT Attendance Check-in
 
 on:
   schedule:
-  # 每天 UTC 1:17 (北京时间 09:17) 运行，逐站点串行签到
-  - cron: '17 1 * * *'
+  # 每天 UTC 17:17 (北京时间 09:17) 运行，逐站点串行签到
+  - cron: '17 17 * * *'
   workflow_dispatch: # 允许手动触发
 
 jobs:
