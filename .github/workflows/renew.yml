@@ -102,14 +102,6 @@ jobs:
         path: renew_state.json
         key: renew-state-${{ github.run_id }}
 
-    - name: Upload Screenshots
-      if: always()
-      uses: actions/upload-artifact@v6
-      with:
-        name: screenshots
-        path: |
-          *.png
-          screenshots/
-          singbox.log
-          config.json
-        if-no-files-found: ignore
+    # 截图上传这一步已经删掉（库是公开的）：artifact 里不只 *.png —— 连 config.json 和
+    # singbox.log 一起传，那两个文件带着面板域名、出口服务器和 vless UUID。
+    # save_screenshot() 照旧在 runner 上留图，只是随 runner 一起消失，不再公开可下载。

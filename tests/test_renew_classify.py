@@ -329,5 +329,38 @@ app._SanitizeFilter(_through).write(_dirty)
 ok(_through.getvalue() == app.wash(_dirty),
    "wash() 与 stdout 过滤器对同一段文本产出完全相同的结果（共用那五条正则，不是另起一份）")
 
+# ---- 起浏览器之前先清残留 Chrome（2026-10-10 "cannot connect to chrome at 127.0.0.1:9556" 的钉子）----
+# 上一个账号的 chrome/chromedriver 没退干净就会占着 remote-debugging 端口，下一个浏览器起来即退出。
+# 判据不是「有没有 pkill」而是**顺序**：清场必须发生在 SB() 之前，否则杀的就是自己正在用的那个。
+_ev = []
+_app_sub, _app_sleep, _app_sb = app.subprocess, app.time.sleep, app.SB
+app.subprocess = type("_FakeSub", (), {"run": staticmethod(
+    lambda cmd, **k: _ev.append("pkill:" + cmd[-1]))})()
+app.time.sleep = lambda s: _ev.append("sleep")
+class _FakeSB:
+    def __enter__(self):
+        _ev.append("SB"); return self
+    def __exit__(self, *a): return False
+    def open(self, url): pass
+    def get_text(self, sel): return "这一页没返回 IP"   # 逼它走「出口探测失败」早退，不碰登录
+app.SB = lambda **kw: _FakeSB()
+try:
+    _st, _dt, _rd = app._run_account({}, "some_user_9527@example.com", "pw")
+    ok(_ev == ["pkill:chrome", "pkill:chromedriver", "sleep", "SB"],
+       "启动浏览器前按顺序清了 chrome / chromedriver，才轮到 SB()：" + str(_ev))
+    ok(_st == RENEW_UNKNOWN and _dt == "出口探测失败", "假浏览器里这条早退路径仍然返回元组，没把异常抛给上层")
+    # 反证：清场如果跑到 SB() 后面，就是在杀自己正在用的浏览器 —— 顺序必须不能反
+    ok("SB" in _ev and _ev.index("pkill:chrome") < _ev.index("SB"),
+       "pkill 一定在 SB() 之前（在后面就是自杀，测试要能分辨这两者）")
+finally:
+    app.subprocess, app.time.sleep, app.SB = _app_sub, _app_sleep, _app_sb
+
+# ---- 公开库的 artifact：截图步骤已经删掉，别再让它长回来 ----
+_yml = (ROOT / ".github/workflows" / "renew.yml").read_text(encoding="utf-8")
+ok("upload-artifact" not in _yml and "Upload Screenshots" not in _yml,
+   "renew.yml 不再上传 artifact（png 上有面板域名，config.json 里有出口地址和 vless UUID）")
+ok("-c config.json" in _yml,
+   "sing-box 自己还是要读 config.json 的 —— 删的只是把它打包公开的那一步")
+
 print("\n✅ PIN_NODE / PROXY_CHAIN_URL 通过 (8 项)")
-print("\n✅✅ 全部测试通过 (15 + 10 + 6 + 12 + 9 + 8 + 15 + 8 + 5 = 88/88)")
+print("\n✅✅ 全部测试通过 (15 + 10 + 6 + 12 + 9 + 8 + 15 + 8 + 8 = 91/91)")

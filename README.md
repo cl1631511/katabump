@@ -43,9 +43,10 @@
 ### 4. 运行结果与截图
 
 - **运行日志**: 在 Actions 中的 `Run Renew Script` 步骤查看。
-- **截图留存**: 每次运行（无论成功与否），通过 `Upload Screenshots` 步骤自动上传截图。
-  - 你可以在 Workflow 运行详情页的 **Artifacts** 区域下载 `screenshots` 压缩包。
-  - 每个账号对应一张截图（`username.png`），方便确认状态。
+- **截图**: 脚本仍然会在失败时截图（`login_failed.png` 等），但**不再上传** ——
+  这个库是公开的，artifact 里除了 `*.png`（页面上带面板域名）还会带 `config.json` 和
+  `singbox.log`（出口服务器地址、vless UUID）。截图只留在 runner 上，随运行结束一起消失。
+  要看结果就看出口日志和 Bark 推送。
 
 5. 保存后，进入 **Actions** 页面，启用 Workflow。它会在**每天北京时间 08:00 (UTC 00:00)** 自动运行。
 6. 你也可以手动点击 "Run workflow" 立即测试。

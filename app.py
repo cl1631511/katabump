@@ -2062,6 +2062,13 @@ def _run_account(sb_kwargs, email, pwd):
     global CURRENT_EMAIL
     CURRENT_EMAIL = email
     print("🚀 启动浏览器...")
+    # 上一个账号的 Chrome/chromedriver 有时不会被收干净（uc 模式 + xvfb-run），它占着
+    # remote-debugging 端口，下一个浏览器起来就自己退出，报错是
+    # "cannot connect to chrome at 127.0.0.1:9556 (connection refused)" —— 看着像代理挂了，
+    # 其实是端口撞车。此刻本进程还没有浏览器，可以安全清场。
+    subprocess.run(["pkill", "-9", "-f", "chrome"], capture_output=True)
+    subprocess.run(["pkill", "-9", "-f", "chromedriver"], capture_output=True)
+    time.sleep(2)
     try:
         with SB(**sb_kwargs) as sb:
             # 在首次导航前注入 Turnstile attachShadow CDP 钩子（对所有后续文档生效，含登录页）
