@@ -17,7 +17,7 @@ PT 每日签到（attendance.php）
 🧩 第 1 次尝试过验证...
 🖱️ [CDP] 原生点击 Turnstile 复选框 (516,376)
 🧩 组件已从页面上消失（点过之后）—— 交给调用点读最终页面
-🧾 audiences 措辞线索: 成功/已签到/获得/奖励/连续/爆米花/签到（正文 749 字）
+🧾 audiences 措辞线索: 成功/已签到/获得/奖励/连续/爆米花/签到（正文 750 字）
 ℹ️  audiences 签到状态: pass | 命中措辞「签到成功」
 ✅ 🎬 audiences.me 签到成功
 <长串已打码>
@@ -35,7 +35,7 @@ PT 每日签到（attendance.php）
 🖱️ [CDP] 原生点击 Turnstile 复选框 (552,348)
 ✅ 拿到 Turnstile token（第 1 次尝试后）
 📨 提交签到表单: clicked
-🧾 mua 措辞线索: 成功/已签到/获得/连续/魔力/签到（正文 986 字）
+🧾 mua 措辞线索: 成功/已签到/获得/连续/魔力/签到（正文 990 字）
 ℹ️  mua 签到状态: pass | 命中措辞「签到成功」
 ✅ 🍥 mua.xloli.cc 签到成功
 #########################
@@ -43,5 +43,5 @@ PT 每日签到（attendance.php）
 #########################
 📩 Bark 推送已送达
 
-- commit b7afb39 | run 38323112323 attempt 1 | schedule
-- 结束(UTC) 2026-10-12 23:39:15
+- commit b486511 | run 38473660815 attempt 1 | schedule
+- 结束(UTC) 2026-10-13 21:53:10
