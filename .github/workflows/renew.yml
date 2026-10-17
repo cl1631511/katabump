@@ -54,8 +54,8 @@ jobs:
         python proxy_handler.py
         echo "Starting sing-box..."
         nohup ./sing-box run -c config.json > singbox.log 2>&1 &
-        # 二跳/单节点无需等 urltest；给 inbound 起来即可
-        sleep 3
+        # 若存在节点池，等待 urltest 探活完成；单节点给 inbound 起来即可
+        sleep 5
         echo "--- singbox.log ---"
         cat singbox.log || true
         echo "--- health check ---"
@@ -73,11 +73,16 @@ jobs:
           grep -iE "urltest|selected|node-|ERROR" singbox.log | tail -8 || true
         else
           echo ""
-          echo "❌ proxy connect FAILED — dialer/chain unreachable from this runner"
-          echo "   The sing-box process is alive but PROXY_URL (and PROXY_CHAIN_URL if set) did not egress."
-          echo "--- singbox.log after fail ---"
-          cat singbox.log || true
-          exit 1
+          if python3 -c "import json; pool=json.load(open('pool.json')); exit(0 if any(n.get('server') and n.get('port') for n in pool) else 1)" 2>/dev/null; then
+            echo "⚠️ Initial proxy probe failed, but pool.json contains backup nodes."
+            echo "   Proceeding to app.py which will rotate through and pin pool nodes..."
+          else
+            echo "❌ proxy connect FAILED — dialer/chain unreachable from this runner"
+            echo "   The sing-box process is alive but PROXY_URL (and PROXY_CHAIN_URL if set) did not egress."
+            echo "--- singbox.log after fail ---"
+            cat singbox.log || true
+            exit 1
+          fi
         fi
 
     - name: Run Renew Script
