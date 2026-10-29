@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "name": "VN-Hanoi-VNPT",
+    "server": "tothost-han-01.telecom.moe",
+    "port": 60001,
+    "sni": "tothost-han-01.telecom.moe"
+  },
+  {
+    "name": "JP-Osaka-Oracle",
+    "server": "oracle-osa-01.telecom.moe",
+    "port": 8444,
+    "sni": "oracle-osa-01.telecom.moe"
+  },
+  {
+    "name": "US-NYC-Buyvm",
+    "server": "buyvm-nyc-01.telecom.moe",
+    "port": 8444,
+    "sni": "buyvm-nyc-01.telecom.moe"
+  },
+  {
+    "name": "CH-BRN-Buyvm",
+    "server": "buyvm-brn-01.telecom.moe",
+    "port": 8444,
+    "sni": "buyvm-brn-01.telecom.moe"
+  }
+]
