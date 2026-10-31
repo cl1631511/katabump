@@ -97,6 +97,7 @@ CHK_ALREADY = "already"          # 今日已签到（等价成功，静默）
 CHK_NO_SESSION = "no_session"    # cookie 失效/被踢回登录页 → 只能人工重新复制 cookie
 CHK_VERIFY_FAIL = "verify_fail"  # Turnstile 未通过
 CHK_UNKNOWN = "unknown"          # 流程未跑通/读不到结果 → 宁红不绿
+CHK_SKIP = "skip"                # 这个站没配 cookie：主动停放（站点撤了签到页），不算失败
 
 # 关键词严格对照 tests/fixtures/{audiences,mua}_attendance_pre_submit.html（未签到态快照）挑选：
 # 「获得」「连续签到」「(粒)爆米花」「人机验证」「今日签到」在未签到页面上本来就出现，
@@ -1074,7 +1075,9 @@ def run_site(sb_kwargs, site):
     if not pairs:
         # 只报长度和格式线索，绝不打印 cookie 内容（CI 日志是公开的）
         if not raw.strip():
-            return (CHK_NO_SESSION, f"{site.cookie_env} 未配置或为空")
+            # 没配 cookie = 这个站被主动停放（audiences.me 把签到页撤了就这样处理）：
+            # 跳过、不开浏览器、不算失败。配了但没用才是问题，往下走 NO_SESSION。
+            return (CHK_SKIP, f"{site.cookie_env} 未配置")
         hint = ("看起来是 JSON 但解析失败" if raw.lstrip()[0] in "[{" else "没有一组形如 name=value")
         return (CHK_NO_SESSION,
                 f"{site.cookie_env} 长度 {len(raw)}，{hint}；"
@@ -1119,12 +1122,13 @@ _STATUS_LINE = {
     CHK_NO_SESSION: ("❌", "登录态失效"),
     CHK_VERIFY_FAIL: ("❌", "人机验证未通过"),
     CHK_UNKNOWN: ("❌", "流程未跑通，需查看"),
+    CHK_SKIP: ("⏭️", "未配 cookie，已跳过"),
 }
 _ALERT = (CHK_NO_SESSION, CHK_VERIFY_FAIL, CHK_UNKNOWN)
 
 # 自检回路的白名单：只有这些前缀的行才被推到公开分支上。
 # 用白名单不用黑名单 —— 以后新加的 print 默认不进证据，看过确认没有账号信息才放进来。
-_LOG_KEEP = ("#", "=", "🔗", "🌐", "🎬", "📍", "🍪", "✅", "⏳", "ℹ️", "❌", "⚠️",
+_LOG_KEEP = ("#", "=", "🔗", "🌐", "🎬", "📍", "🍪", "✅", "⏳", "⏭️", "ℹ️", "❌", "⚠️",
              "🔎", "🧩", "📨", "🖱️", "🧾", "📩", "─", "完毕", "PT 每日签到")
 
 
@@ -1174,6 +1178,10 @@ def main():
         for site in sites:
             raw = os.environ.get(site.cookie_env, "")
             pairs = parse_cookie_header(raw)
+            if not raw.strip():
+                print(f"{site.key}: ⏭️ 没配 cookie —— 这一轮会被跳过，不算失败"
+                      f"（需要 {session_hint(site)}）")
+                continue
             verdict = "✅ 可用于签到" if session_ok(pairs, site) else "❌ 判为无登录态"
             print(f"{site.key}: {verdict}（需要 {session_hint(site)}；"
                   f"解析出 {len(pairs)} 项：{', '.join(n for n, _ in pairs) or '无'}）")
@@ -1203,12 +1211,15 @@ def main():
         status, detail = run_site(sb_kwargs, site)
         icon, text = _STATUS_LINE[status]
         # 公开仓库的 CI 日志也是公开的：成功态不带页面原文，失败态才带（原文里可能有账号名）
-        line = f"{icon} {site.label} {text}" + (f"：{detail}" if detail and status in _ALERT else "")
+        # 跳过态带上 cookie 变量名，方便哪天站点把签到页加回来时知道往哪个 Secret 里填
+        line = f"{icon} {site.label} {text}" + (
+            f"：{detail}" if detail and (status in _ALERT or status == CHK_SKIP) else "")
         print(line)   # 无论有没有配推送渠道，日志里都得看得到原因
         lines.append(line)
         if status in _ALERT:
             alert = True
-        if status != CHK_ALREADY:
+        if status not in (CHK_ALREADY, CHK_SKIP):
+            # 跳过的站不参与「今日均已签到」这句判断：它本来就不在待办里
             all_already = False
         if status == CHK_UNKNOWN:
             print(f"（{site.key} 的措辞线索已在上方 🧾 行打印，若一个都没命中需扩 _CLUE_WORDS 再校准关键词）")

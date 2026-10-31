@@ -500,7 +500,23 @@ ok("attendance_mua_turnstile_fail.png" in sb.shots, "M5b 截图名不与 audienc
 # ===== 站点级：cookie 配置缺失 / 字段不符 =====
 os.environ.pop("MUA_COOKIE", None)
 st, detail = aud.run_site({"uc": True}, SITE_M)
-ok(st == aud.CHK_NO_SESSION and "MUA_COOKIE" in detail, f"S1 未配置 MUA_COOKIE -> 直接提示（{detail}）")
+ok(st == aud.CHK_SKIP and "MUA_COOKIE" in detail,
+   f"S1 未配置 MUA_COOKIE -> 跳过，不算失败（{st}｜{detail}）")
+
+os.environ["MUA_COOKIE"] = "   "
+st, detail = aud.run_site({"uc": True}, SITE_M)
+ok(st == aud.CHK_SKIP, f"S1b 空白也算没配 -> 跳过（{st}）")
+
+ok(aud.CHK_SKIP not in aud._ALERT, "S1c 跳过态不告警（不让 Actions 红灯）")
+ok(aud.CHK_SKIP in aud._STATUS_LINE and aud._STATUS_LINE[aud.CHK_SKIP][0] == "⏭️",
+   "S1d 跳过态有自己的图标")
+ok("⏭️" in aud.sanitize_log("⏭️ mua.xloli.cc 未配 cookie，已跳过：MUA_COOKIE 未配置"),
+   "S1e 跳过那行进得了脱敏证据（白名单里要有 ⏭️）")
+
+os.environ["MUA_COOKIE"] = "这一串根本不是 cookie 格式"
+st, detail = aud.run_site({"uc": True}, SITE_M)
+ok(st == aud.CHK_NO_SESSION and "长度" in detail,
+   f"S1f 配了但解析不出 name=value -> 仍是失败，不静默跳过（{st}｜{detail}）")
 
 os.environ["MUA_COOKIE"] = "cf_clearance=abc; lang=cn"
 st, detail = aud.run_site({"uc": True}, SITE_M)

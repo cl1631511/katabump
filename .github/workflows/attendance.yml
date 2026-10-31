@@ -69,7 +69,8 @@ jobs:
           exit 1
         fi
 
-    # 站点表在 attendance_checkin.py 的 SITES 里；每站一个 Cookie secret，缺哪个就只有那个站报红。
+    # 站点表在 attendance_checkin.py 的 SITES 里；每站一个 Cookie secret。
+    # secret 留空 = 主动停放那一站（⏭️ 跳过，不算失败）；配了但没登录字段才报红。
     # 只想跑其中一站时加 CHECKIN_SITES: "audiences" 或 "mua"。
     - name: Run Check-in Script
       env:

@@ -71,7 +71,9 @@ Bark 实现，续期和签到共用一条渠道代码）。
    c_secure_uid=ZmFrZVVpZA...; c_secure_pass=...; c_secure_login=...; cf_clearance=...
    ```
    `cf_clearance` 可不带 —— 它是 IP/UA 绑定的，CI 出口和浏览器不一样，过期了浏览器会自己重新过 CF。
-   缺哪个站 secret 就只有那个站报红，另一站照签。
+   把某个站的 secret **留空或删掉**就是主动停放它：那一站 `⏭️ 未配 cookie，已跳过`，不开浏览器、
+   不算失败、不让 Actions 变红（audiences.me 撤掉签到页之后就这么处理）。配了但解析不出登录字段
+   才是问题 —— 只有那个站报红，另一站照签。
 3. **Workflow**：`.github/workflows/attendance.yml`，每天北京时间 09:17 逐站串行跑，
    与续期共用 `PROXY_URL` / `PROXY_CHAIN_URL` / `BARK_KEY` / `BARK_URL` / `TG_BOT_TOKEN` / `TG_CHAT_ID`。
    手动触发：Actions → PT Attendance Check-in → Run workflow；只想跑一站就在 step env 加

@@ -277,6 +277,23 @@ finally:
     aud.run_site = _real_run_site
 ok(len(GETS) == 1, "B18 全员已签到那一轮照样推一条（收到=今天没漏，没收到=该查）")
 
+# 站点把签到页撤了（audiences.me）就把那个 Secret 清空停放：不该再天天红灯
+GETS.clear()
+_real_run_site = aud.run_site
+_st = {aud.SITES[0].key: aud.CHK_SKIP}
+aud.run_site = lambda sb_kwargs, site: (
+    _st.get(site.key, aud.CHK_ALREADY),
+    f"{site.cookie_env} 未配置" if _st.get(site.key) == aud.CHK_SKIP else "")
+try:
+    with contextlib.redirect_stdout(io.StringIO()):
+        aud.main()
+finally:
+    aud.run_site = _real_run_site
+_sent = urllib.parse.unquote(GETS[0][0]) if GETS else ""
+ok(len(GETS) == 1, "B23 一个站跳过 + 一个站已签到：不报错，照样推一条")
+ok("⏭️" in _sent and "未配置" in _sent,
+   f"B24 推送里看得见哪个站被跳过、缺的是哪个 Secret（{_sent[:60]}）")
+
 # ── 10. 续期每轮汇总：一条消息盖所有账号，且不顶着一个账号名 ────────────────
 GETS.clear()
 app_mod.CURRENT_EMAIL = "some_user_9527@example.com"
