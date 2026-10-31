@@ -5,7 +5,7 @@ PT 每日签到（attendance.php）
 <长串已打码>
 🎬 audiences.me
 <长串已打码>
-❌ 🎬 audiences.me 登录态失效：AUDIENCES_COOKIE 缺少登录 cookie，需要 passkey、c_secure_pass（至少有一个）；现有: cf_clearance, pigo_np_web_session, sl-session
+❌ 🎬 audiences.me 登录态失效：AUDIENCES_COOKIE 未配置或为空
 <长串已打码>
 <长串已打码>
 ── 节点尝试 1/4 ──
@@ -24,5 +24,5 @@ PT 每日签到（attendance.php）
 #########################
 📩 Bark 推送已送达
 
-- commit 3b4fb92 | run 41131342301 attempt 2 | schedule
-- 结束(UTC) 2026-10-31 12:11:55
+- commit 3b4fb92 | run 41200354049 attempt 1 | workflow_dispatch
+- 结束(UTC) 2026-10-31 12:17:30
