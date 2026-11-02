@@ -58,15 +58,25 @@ jobs:
         echo "✅ sing-box process alive"
         (command -v ss >/dev/null && ss -tlnp 2>/dev/null | grep 8080) || echo "(ss unavailable)"
         echo "--- proxy connectivity test ---"
+        # 探测页不回话 ≠ 隧道没通（同 renew.yml）：只有握手层挂了才否决代理。
+        # 探测被 RST 时如果 pool.json 还有备用节点，交给脚本逐节点钉死重试，别在这掐掉整轮
+        # —— 掐掉等于连一条 Bark 汇总都发不出去。
         if curl -sS -m 20 -x http://127.0.0.1:8080 https://ipv4.icanhazip.com; then
           echo ""
           echo "  <- proxy OK"
           grep -iE "urltest|selected|node-|ERROR" singbox.log | tail -8 || true
         else
           echo ""
-          echo "❌ proxy connect FAILED — dialer/chain unreachable from this runner"
-          cat singbox.log || true
-          exit 1
+          if python3 -c "import json; pool=json.load(open('pool.json')); exit(0 if any(n.get('server') and n.get('port') for n in pool) else 1)" 2>/dev/null; then
+            echo "⚠️ 探测页没回话，但 pool.json 里有备用节点。"
+            echo "   不否决代理，继续跑 attendance_checkin.py，由它逐节点钉死重试（最多 4 个）。"
+          else
+            echo "❌ proxy connect FAILED — dialer/chain unreachable from this runner"
+            echo "   sing-box 进程在，但 PROXY_URL（以及 PROXY_CHAIN_URL 若配了）没吐出出口。"
+            echo "--- singbox.log after fail ---"
+            cat singbox.log || true
+            exit 1
+          fi
         fi
 
     # 站点表在 attendance_checkin.py 的 SITES 里；每站一个 Cookie secret。
