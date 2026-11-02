@@ -66,8 +66,9 @@ jobs:
         echo "✅ sing-box process alive"
         (command -v ss >/dev/null && ss -tlnp 2>/dev/null | grep 8080) || echo "(ss unavailable)"
         echo "--- proxy connectivity test ---"
-        # icanhazip：api.ip.sb / gstatic 在部分出口会被 RST，不等于隧道没通。
-        if curl -sS -m 20 -x http://127.0.0.1:8080 https://ipv4.icanhazip.com; then
+        # 探测页不回话 ≠ 隧道没通。checkip 只有 A 记录、不嫌弃机房出口；
+        # api.ip.sb / gstatic / icanhazip 在部分出口会被 RST，判不出是站点还是隧道。
+        if curl -sS -m 20 -x http://127.0.0.1:8080 https://checkip.amazonaws.com; then
           echo ""
           echo "  <- proxy OK"
           grep -iE "urltest|selected|node-|ERROR" singbox.log | tail -8 || true

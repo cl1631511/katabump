@@ -880,7 +880,7 @@ def checkin(sb_kwargs, site, pairs):
             except Exception as e:
                 print(f"  ℹ️ 窗口没最大化: {type(e).__name__}")
             try:
-                sb.open("https://ipv4.icanhazip.com")
+                sb.open("https://checkip.amazonaws.com")
                 ip_text = (sb.get_text("body") or "").strip()
                 print(f"📍  当前出口IP: {ip_text}")
                 if core._egress_unusable(ip_text):

@@ -2074,7 +2074,7 @@ def _run_account(sb_kwargs, email, pwd):
             # 在首次导航前注入 Turnstile attachShadow CDP 钩子（对所有后续文档生效，含登录页）
             _install_turnstile_hook_cdp(sb)
             try:
-                sb.open("https://ipv4.icanhazip.com")
+                sb.open("https://checkip.amazonaws.com")
                 ip_text = (sb.get_text("body") or "").strip()
                 print(f"📍  当前出口IP: {ip_text}")
                 if _egress_unusable(ip_text):

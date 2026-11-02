@@ -59,9 +59,10 @@ jobs:
         (command -v ss >/dev/null && ss -tlnp 2>/dev/null | grep 8080) || echo "(ss unavailable)"
         echo "--- proxy connectivity test ---"
         # 探测页不回话 ≠ 隧道没通（同 renew.yml）：只有握手层挂了才否决代理。
+        # 站点用 checkip（只有 A 记录、不嫌弃机房出口）；icanhazip 会被某些出口 RST，判不出是站点还是隧道。
         # 探测被 RST 时如果 pool.json 还有备用节点，交给脚本逐节点钉死重试，别在这掐掉整轮
         # —— 掐掉等于连一条 Bark 汇总都发不出去。
-        if curl -sS -m 20 -x http://127.0.0.1:8080 https://ipv4.icanhazip.com; then
+        if curl -sS -m 20 -x http://127.0.0.1:8080 https://checkip.amazonaws.com; then
           echo ""
           echo "  <- proxy OK"
           grep -iE "urltest|selected|node-|ERROR" singbox.log | tail -8 || true
