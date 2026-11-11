@@ -21,7 +21,7 @@ PT 每日签到（attendance.php）
 🖱️ [CDP] 原生点击 Turnstile 复选框 (552,348)
 ✅ 拿到 Turnstile token（第 1 次尝试后）
 📨 提交签到表单: clicked
-🧾 mua 措辞线索: 成功/已签到/获得/连续/魔力/签到（正文 1052 字）
+🧾 mua 措辞线索: 成功/已签到/获得/连续/魔力/签到（正文 1054 字）
 ℹ️  mua 签到状态: pass | 命中措辞「签到成功」
 ✅ 🍥 mua.xloli.cc 签到成功
 #########################
@@ -29,5 +29,5 @@ PT 每日签到（attendance.php）
 #########################
 📩 Bark 推送已送达
 
-- commit dada6a4 | run 42913832870 attempt 1 | schedule
-- 结束(UTC) 2026-11-10 22:25:07
+- commit dada6a4 | run 43119922816 attempt 1 | schedule
+- 结束(UTC) 2026-11-11 23:28:35
