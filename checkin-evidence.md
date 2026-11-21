@@ -21,13 +21,16 @@ PT 每日签到（attendance.php）
 🖱️ [CDP] 原生点击 Turnstile 复选框 (552,348)
 ✅ 拿到 Turnstile token（第 1 次尝试后）
 📨 提交签到表单: clicked
-🧾 mua 措辞线索: 成功/已签到/获得/连续/魔力/签到（正文 1079 字）
+🧾 mua 措辞线索: 成功/已签到/获得/连续/魔力/签到（正文 1082 字）
 ℹ️  mua 签到状态: pass | 命中措辞「签到成功」
 ✅ 🍥 mua.xloli.cc 签到成功
+<长串已打码>
+<长串已打码>
+❌ 🦉 ourbits.club 登录态失效：OURBITS_COOKIE 缺少登录 cookie，需要 passkey、c_secure_pass（至少有一个）；现有: cf_clearance, ourbits_jwt
 #########################
-完毕：audiences=⏭️ | mua=✅
+完毕：audiences=⏭️ | mua=✅ | ourbits=❌
 #########################
 📩 Bark 推送已送达
 
-- commit 977d59f | run 44833969062 attempt 1 | schedule
-- 结束(UTC) 2026-11-20 23:06:03
+- commit d71e9d2 | run 44955325545 attempt 1 | schedule
+- 结束(UTC) 2026-11-21 22:11:35
