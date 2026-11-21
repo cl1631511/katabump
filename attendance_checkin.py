@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 """NexusPHP 系站点每日签到（attendance.php），站点在 SITES 表里逐个加。
 
-当前覆盖：audiences.me、mua.xloli.cc。两站机制同构 —— 「登录态 cookie + Cloudflare Turnstile」，
+当前覆盖：audiences.me、mua.xloli.cc、ourbits.club。三站机制同构 —— 「登录态 cookie + Cloudflare Turnstile」，
 签到动作就是把 token 交回 attendance.php：
   - audiences：表单只有 widget，widget 的 data-callback=cfCallback 自动 submit；
-  - mua      ：表单带「立即签到」按钮，需要点它提交。
+  - mua      ：表单带「立即签到」按钮，需要点它提交；
+  - ourbits  ：与 audiences 同构（NexusPHP + Turnstile），共用同一条提交路径。
 脚本对两种都走同一条路：有按钮点按钮，没按钮才 form.submit()。
 
 复用 katabump 的现成设施，app.py 一行不改：
@@ -86,6 +87,15 @@ SITES = (
         cookie_env="MUA_COOKIE",
         require_any=_SESSION_KEYS,
     ),
+    Site(
+        key="ourbits",
+        label="🦉 ourbits.club",
+        home="https://ourbits.club/index.php",
+        attend="https://ourbits.club/attendance.php",
+        domain=".ourbits.club",
+        cookie_env="OURBITS_COOKIE",
+        require_any=_SESSION_KEYS,
+    ),
 )
 
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN") or ""
@@ -100,6 +110,7 @@ CHK_UNKNOWN = "unknown"          # 流程未跑通/读不到结果 → 宁红不
 CHK_SKIP = "skip"                # 这个站没配 cookie：主动停放（站点撤了签到页），不算失败
 
 # 关键词严格对照 tests/fixtures/{audiences,mua}_attendance_pre_submit.html（未签到态快照）挑选：
+# ourbits.club 暂无真实未签到快照，先沿用同一套判据；读不出结果一律 unknown，不靠猜词报绿。
 # 「获得」「连续签到」「(粒)爆米花」「人机验证」「今日签到」在未签到页面上本来就出现，
 # 用它们判成功必然假绿。成功措辞仍缺真实样本，故另有一条与措辞无关的信号：verify_pending。
 # 去掉光秃秃的「已签到」：统计行「您已签到 12 天」也含它，未签到当天照样命中 -> 静默假绿。

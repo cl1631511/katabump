@@ -56,7 +56,7 @@
 
 ## 🎫 PT 每日签到 (`attendance_checkin.py`)
 
-已接入站点：**audiences.me**、**mua.xloli.cc**（都在 `attendance.php`）。两站机制同构 ——
+已接入站点：**audiences.me**、**mua.xloli.cc**、**ourbits.club**（都在 `attendance.php`）。三站机制同构 ——
 「登录态 cookie + Cloudflare Turnstile」，签到就是把 token 交回表单，没有别的动作。
 本仓库已有 Turnstile 绕过和 sing-box 出口池，签到直接复用（推送也直接复用 `app.py` 里那份
 Bark 实现，续期和签到共用一条渠道代码）。
@@ -64,7 +64,7 @@ Bark 实现，续期和签到共用一条渠道代码）。
 1. **取 Cookie**（一次即可，失效再换）：浏览器登录该站 → F12 → **Network** → 刷新
    `attendance.php` → 点该请求 → **Request Headers** 里的整条 `Cookie` 值复制出来。
 2. **加 Secret**：Settings → Secrets and variables → Actions，一站一个：
-   - `AUDIENCES_COOKIE`、`MUA_COOKIE` —— 整条 `Cookie` 头原样贴进去即可，脚本只检查
+   - `AUDIENCES_COOKIE`、`MUA_COOKIE`、`OURBITS_COOKIE` —— 整条 `Cookie` 头原样贴进去即可，脚本只检查
      里面有没有登录字段：NexusPHP 的「安全 cookie」模式是 `c_secure_pass`（配合 `c_secure_uid`），
      老模式是 `passkey`（配合 `uid`）；有 pass 那一个就算有登录态。
    ```
@@ -77,7 +77,7 @@ Bark 实现，续期和签到共用一条渠道代码）。
 3. **Workflow**：`.github/workflows/attendance.yml`，每天北京时间 09:17 逐站串行跑，
    与续期共用 `PROXY_URL` / `PROXY_CHAIN_URL` / `BARK_KEY` / `BARK_URL` / `TG_BOT_TOKEN` / `TG_CHAT_ID`。
    手动触发：Actions → PT Attendance Check-in → Run workflow；只想跑一站就在 step env 加
-   `CHECKIN_SITES: "mua"`。
+   `CHECKIN_SITES: "mua"` 或 `CHECKIN_SITES: "ourbits"`。
 4. **判定规则**：签到成功 ✅；今日已签 ⏳；cookie 失效 / 人机验证没过 / 流程没跑通
    → ❌ 告警 + CI 红灯。**每轮都推一条**汇总所有站点（照 PT-Checkin 的做法：收到通知就等于
    「今天的签到没漏」，收不到才该去查），全员已签的那轮标题写「今日均已签到」而不是「签到成功」。
@@ -94,6 +94,7 @@ Bark 实现，续期和签到共用一条渠道代码）。
    ```powershell
    $env:AUDIENCES_COOKIE="c_secure_uid=...; c_secure_pass=..."
    $env:MUA_COOKIE="c_secure_pass=..."
+   $env:OURBITS_COOKIE="c_secure_pass=..."
    python attendance_checkin.py --cookie-check   # 解析与字段名对不对
    python attendance_checkin.py --cookie-probe   # 纯 HTTP 问一次：这串 cookie 在这个出口认不认
    python attendance_checkin.py                  # 开浏览器真签到
@@ -198,7 +199,7 @@ node renew.js
 * `renew.js`: Windows 本地运行的主程序。
 * `action_renew.js`: 专门用于 GitHub Actions 环境的脚本（适配 Linux/Headless），支持随机延迟和 sing-box 代理。
 * `proxy_handler.py`: 代理协议解析器，将 vmess/vless/hy2/tuic/socks5 等协议转换为 sing-box 配置。
-* `attendance_checkin.py`: PT 每日签到（audiences.me / mua.xloli.cc，复用 app.py 的 Turnstile 绕过与代理池）。
+* `attendance_checkin.py`: PT 每日签到（audiences.me / mua.xloli.cc / ourbits.club，复用 app.py 的 Turnstile 绕过与代理池）。
 * `.github/workflows/attendance.yml`: 签到的定时任务。
 * `tests/fixtures/*_attendance_pre_submit.html`: 各站未签到态页面快照，防假绿的回归测试素材。
 * `tests/scrub_fixture.py`: 把新快照里的账号标识洗成占位值（公开仓库提交前必跑）。

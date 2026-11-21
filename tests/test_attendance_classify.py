@@ -52,6 +52,7 @@ PASS, ALREADY = aud.CHK_PASS, aud.CHK_ALREADY
 NO_SESSION, VERIFY_FAIL, UNKNOWN = aud.CHK_NO_SESSION, aud.CHK_VERIFY_FAIL, aud.CHK_UNKNOWN
 SITE_A = [s for s in aud.SITES if s.key == "audiences"][0]
 SITE_M = [s for s in aud.SITES if s.key == "mua"][0]
+SITE_O = [s for s in aud.SITES if s.key == "ourbits"][0]
 
 
 def load_text(name):
@@ -148,6 +149,10 @@ ok(not aud.session_ok([("c_secure_uid", "ZmFrZVVpZA=")], SITE_A),
 ok(not aud.session_ok([("c_secure_ssl", "fakeSslFlag"), ("c_secure_login", "fakeLoginShort")], SITE_A),
    "audiences: c_secure_* 里非 pass 的字段不算登录态")
 ok(aud.session_ok([("c_secure_pass", "x")], SITE_M), "mua: c_secure_pass 即算有会话")
+ok(SITE_O.domain == ".ourbits.club" and SITE_O.attend == "https://ourbits.club/attendance.php",
+   "ourbits: 站点表域名与签到页写对")
+ok(aud.session_ok([("c_secure_pass", "x")], SITE_O), "ourbits: c_secure_pass 即算有会话（同 audiences）")
+ok(not aud.session_ok([("cf_clearance", "x")], SITE_O), "ourbits: 只有 CF 凭证不算登录态")
 ok(aud.parse_cookie_header("c_secure_uid=ZmFrZVVpZA%3D%3D") == [("c_secure_uid", "ZmFrZVVpZA%3D%3D")],
    "URL 编码值原样保留（不能把 %3D 当分隔符）")
 
