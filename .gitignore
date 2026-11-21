@@ -8,3 +8,6 @@ __pycache__/
 # 签到运行时证据
 attendance_result_*.txt
 attendance_*.png
+
+# 本地项目记忆（不进公开库）
+.workbuddy/
