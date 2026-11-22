@@ -65,8 +65,9 @@ Bark 实现，续期和签到共用一条渠道代码）。
    `attendance.php` → 点该请求 → **Request Headers** 里的整条 `Cookie` 值复制出来。
 2. **加 Secret**：Settings → Secrets and variables → Actions，一站一个：
    - `AUDIENCES_COOKIE`、`MUA_COOKIE`、`OURBITS_COOKIE` —— 整条 `Cookie` 头原样贴进去即可，脚本只检查
-     里面有没有登录字段：NexusPHP 的「安全 cookie」模式是 `c_secure_pass`（配合 `c_secure_uid`），
-     老模式是 `passkey`（配合 `uid`）；有 pass 那一个就算有登录态。
+     里面有没有登录字段：audiences / mua 走 NexusPHP 的「安全 cookie」模式 `c_secure_pass`（配合
+     `c_secure_uid`）或老模式 `passkey`（配合 `uid`）；**ourbits 不认这两个，它认 `ourbits_jwt`**。
+     各站认哪种字段写在 `attendance_checkin.py` 的 `SITES.require_any` 里。
    ```
    c_secure_uid=ZmFrZVVpZA...; c_secure_pass=...; c_secure_login=...; cf_clearance=...
    ```
@@ -94,7 +95,7 @@ Bark 实现，续期和签到共用一条渠道代码）。
    ```powershell
    $env:AUDIENCES_COOKIE="c_secure_uid=...; c_secure_pass=..."
    $env:MUA_COOKIE="c_secure_pass=..."
-   $env:OURBITS_COOKIE="c_secure_pass=..."
+   $env:OURBITS_COOKIE="ourbits_jwt=..."
    python attendance_checkin.py --cookie-check   # 解析与字段名对不对
    python attendance_checkin.py --cookie-probe   # 纯 HTTP 问一次：这串 cookie 在这个出口认不认
    python attendance_checkin.py                  # 开浏览器真签到

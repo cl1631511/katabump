@@ -66,6 +66,7 @@ class Site:
 #   普通模式  uid + passkey
 #   安全模式  c_secure_uid + c_secure_pass（现在建站默认都开这个）
 # 真正起认证作用的只有 pass 那一个（c_secure_uid 只是 base64 的用户 id），所以只卡 pass。
+# ourbits 不用这套，它签的是 ourbits_jwt；每个站用 Site.require_any 声明自己认哪种会话字段。
 _SESSION_KEYS = ("passkey", "c_secure_pass")
 
 SITES = (
@@ -94,7 +95,9 @@ SITES = (
         attend="https://ourbits.club/attendance.php",
         domain=".ourbits.club",
         cookie_env="OURBITS_COOKIE",
-        require_any=_SESSION_KEYS,
+        # 这站不认 NexusPHP 的 pass/passkey，登录态是 ourbits_jwt。
+        # cf_clearance 虽然会粘进来，但 IP/UA 绑定，按 _CF_COOKIES 的规矩不注入。
+        require_any=("ourbits_jwt",),
     ),
 )
 
@@ -185,6 +188,8 @@ def parse_cookie_header(raw):
 
 
 def session_hint(site):
+    if not site.require_any:
+        return "任意 cookie"
     return "、".join(site.require_any) + "（至少有一个）"
 
 
@@ -194,6 +199,16 @@ def session_ok(pairs, site):
     if site.require_any and not any(k in names for k in site.require_any):
         return False
     return bool(names)
+
+
+def _session_landed(landed, site):
+    """注入进浏览器的 cookie 里，有没有这个站认的会话字段。
+
+    以前这里写死 _SESSION_KEYS，ourbits 的 ourbits_jwt 会被当成「没写进去」，
+    明明注入成功了却退回首页再注一次、最后报 CHK_UNKNOWN。按站点声明的字段判。
+    """
+    names = {n.lower() for n in landed}
+    return any(k.lower() in names for k in site.require_any)
 
 
 def classify_attendance(page_text, url="", verify_pending=None):
@@ -901,12 +916,12 @@ def checkin(sb_kwargs, site, pairs):
 
             # cookie 先进罐，再发第一枪：mua 是「无 cookie 不给连」，先开首页等于自己关门。
             landed = _inject_cookies_cdp(sb, pairs, site)
-            if not any(k in landed for k in _SESSION_KEYS):
+            if not _session_landed(landed, site):
                 # CDP 这条路整体不通（少见）才退回「先开首页建域再写」，本站首枪会不带 cookie
                 print("  ↩️ 退回首页建域再注入（首枪不带 cookie）")
                 _navigate(sb, site.home)
                 landed = _inject_cookies_page(sb, pairs, site)
-            if not any(k in landed for k in _SESSION_KEYS):
+            if not _session_landed(landed, site):
                 return (CHK_UNKNOWN,
                         f"登录 cookie 没写进浏览器（落地: {', '.join(landed) or '无'}）"
                         "—— 是注入这步失败，不是站点拒绝")

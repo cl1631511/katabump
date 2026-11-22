@@ -151,8 +151,13 @@ ok(not aud.session_ok([("c_secure_ssl", "fakeSslFlag"), ("c_secure_login", "fake
 ok(aud.session_ok([("c_secure_pass", "x")], SITE_M), "mua: c_secure_pass 即算有会话")
 ok(SITE_O.domain == ".ourbits.club" and SITE_O.attend == "https://ourbits.club/attendance.php",
    "ourbits: 站点表域名与签到页写对")
-ok(aud.session_ok([("c_secure_pass", "x")], SITE_O), "ourbits: c_secure_pass 即算有会话（同 audiences）")
+ok(aud.session_ok([("ourbits_jwt", "x")], SITE_O), "ourbits: ourbits_jwt 即算有会话（实际粘的就是这个）")
+ok(not aud.session_ok([("c_secure_pass", "x")], SITE_O), "ourbits: c_secure_pass 不是这站的登录字段")
 ok(not aud.session_ok([("cf_clearance", "x")], SITE_O), "ourbits: 只有 CF 凭证不算登录态")
+ok(aud._session_landed(["cf_clearance", "ourbits_jwt"], SITE_O),
+   "ourbits: 注入落地判定认 ourbits_jwt，不被 cf_clearance 挡掉")
+ok(not aud._session_landed(["cf_clearance"], SITE_O),
+   "ourbits: 只注入 cf_clearance 不算会话落地")
 ok(aud.parse_cookie_header("c_secure_uid=ZmFrZVVpZA%3D%3D") == [("c_secure_uid", "ZmFrZVVpZA%3D%3D")],
    "URL 编码值原样保留（不能把 %3D 当分隔符）")
 
