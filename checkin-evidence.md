@@ -21,7 +21,7 @@ PT 每日签到（attendance.php）
 🖱️ [CDP] 原生点击 Turnstile 复选框 (552,348)
 ✅ 拿到 Turnstile token（第 1 次尝试后）
 📨 提交签到表单: clicked
-🧾 mua 措辞线索: 成功/已签到/获得/连续/魔力/签到（正文 1095 字）
+🧾 mua 措辞线索: 成功/已签到/获得/连续/魔力/签到（正文 1098 字）
 ℹ️  mua 签到状态: pass | 命中措辞「签到成功」
 ✅ 🍥 mua.xloli.cc 签到成功
 <长串已打码>
@@ -32,8 +32,8 @@ PT 每日签到（attendance.php）
 📍  当前出口IP: ***.***.***.***
 🍪 首次请求前 写入成功 1/1: ourbits_jwt｜不注入 CF 凭证: cf_clearance
 ✅ 页面就绪（1s）: OurBits :: 签到 - Powered by NexusPHP
-🔎 首枪后页面特征: 我的空间/退出链接=3 login.php 链接=0 签到表单=0 Turnstile=0 签到按钮=0 CF组件=0 密码框=0 正文长度=779
-🧾 ourbits 措辞线索: 成功/获得/连续/魔力/签到（正文 779 字）
+🔎 首枪后页面特征: 我的空间/退出链接=3 login.php 链接=0 签到表单=0 Turnstile=0 签到按钮=0 CF组件=0 密码框=0 正文长度=798
+🧾 ourbits 措辞线索: 成功/获得/连续/魔力/签到（正文 798 字）
 ℹ️ 页面已显示签到结果，跳过提交
 ℹ️  ourbits 签到状态: pass | 命中措辞「签到成功」
 ✅ 🦉 ourbits.club 签到成功
@@ -42,5 +42,5 @@ PT 每日签到（attendance.php）
 #########################
 📩 Bark 推送已送达
 
-- commit 4b2e726 | run 45732570587 attempt 1 | schedule
-- 结束(UTC) 2026-11-26 01:00:47
+- commit 4b2e726 | run 45919988452 attempt 1 | schedule
+- 结束(UTC) 2026-11-27 01:01:39
